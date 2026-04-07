@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "evals-viewer-io"
+version = "0.0.1"
+description = "Pydantic schemas and a writer for the evals-viewer on-disk format."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+pytest = ["pytest>=7"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/evals_viewer_io"]

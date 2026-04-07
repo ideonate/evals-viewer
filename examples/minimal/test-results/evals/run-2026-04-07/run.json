@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-04-07T10:00:00Z",
+  "git_commit": "abc1234",
+  "git_branch": "main",
+  "git_dirty": false,
+  "tags": ["example"]
+}

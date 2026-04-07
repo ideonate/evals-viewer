@@ -1,0 +1,13 @@
+{
+  "name": "evals-viewer-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "examples/*"
+  ],
+  "scripts": {
+    "example": "npm run dev -w examples/minimal"
+  }
+}

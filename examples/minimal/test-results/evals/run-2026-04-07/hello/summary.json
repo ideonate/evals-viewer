@@ -1,0 +1,19 @@
+{
+  "timestamp": "2026-04-07T10:00:00Z",
+  "aggregates": {
+    "Politeness": { "mean": 0.85, "min": 0.7, "max": 1.0 }
+  },
+  "cases": [
+    {
+      "name": "case_world",
+      "success": true,
+      "scores": { "Politeness": 0.9 },
+      "judge_reasons": { "Politeness": "Friendly and welcoming." }
+    },
+    {
+      "name": "case_friend",
+      "success": true,
+      "scores": { "Politeness": 0.8 }
+    }
+  ]
+}

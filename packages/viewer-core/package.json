@@ -1,0 +1,21 @@
+{
+  "name": "@evals-viewer/core",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Reusable Vue 3 components and composables for the evals viewer framework.",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./style.css": "./src/style.css"
+  },
+  "files": [
+    "src"
+  ],
+  "peerDependencies": {
+    "vue": "^3.4.0",
+    "vue-router": "^4.2.0"
+  },
+  "dependencies": {
+    "yaml": "^2.8.2"
+  }
+}

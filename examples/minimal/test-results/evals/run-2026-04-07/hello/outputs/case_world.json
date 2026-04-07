@@ -1,0 +1,6 @@
+{
+  "greeting": "Hello, world!",
+  "recipient": "world",
+  "input_tokens": 12,
+  "output_tokens": 4
+}

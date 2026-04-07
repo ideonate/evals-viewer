@@ -1,0 +1,745 @@
+<template>
+  <div class="evals-list">
+    <div class="header-row">
+      <h1>Eval Runs</h1>
+      <div v-if="!loading && runs.length > 0" class="header-controls">
+        <div class="group-controls">
+          <button
+            class="group-btn"
+            :class="{ active: groupBy === 'timestamp' }"
+            @click="groupBy = 'timestamp'"
+          >
+            By Time
+          </button>
+          <button
+            class="group-btn"
+            :class="{ active: groupBy === 'eval' }"
+            @click="groupBy = 'eval'"
+          >
+            By Eval
+          </button>
+        </div>
+        <div class="compare-controls">
+          <button
+            class="toggle-compare-btn"
+            :class="{ active: compareMode }"
+            @click="toggleCompareMode"
+          >
+            {{ compareMode ? "Cancel" : "Compare Runs" }}
+          </button>
+          <button
+            v-if="compareMode && selectedForCompare.length >= 2"
+            class="compare-btn"
+            @click="goToCompare"
+          >
+            Compare ({{ selectedForCompare.length }})
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="compareMode" class="compare-hint">
+      Select 2 or more evals of the same type to compare. Selected:
+      {{ selectedForCompare.length }}
+    </div>
+
+    <div v-if="loading" class="loading">Loading...</div>
+    <div v-else-if="error" class="error">{{ error }}</div>
+    <div v-else-if="runs.length === 0" class="empty">No eval runs found</div>
+
+    <template v-else>
+      <!-- By Time: each run is a group -->
+      <template v-if="groupBy === 'timestamp'">
+        <div v-for="run in runs" :key="run.run_id" class="eval-group">
+          <div class="group-header">
+            <span class="group-title">{{ formatDate(run.timestamp) }}</span>
+            <span
+              v-if="run.git_commit"
+              class="git-badge"
+              :title="run.git_branch || ''"
+            >
+              <span class="git-icon">⎇</span>
+              {{ run.git_commit }}{{ run.git_dirty ? "*" : "" }}
+              <span v-if="run.git_branch" class="git-branch">{{
+                run.git_branch
+              }}</span>
+            </span>
+            <span
+              v-for="tag in run.tags"
+              :key="tag"
+              class="tag-badge"
+              :class="{ 'user-tag': (run.user_tags || []).includes(tag) }"
+            >
+              {{ tag }}
+              <button
+                v-if="(run.user_tags || []).includes(tag)"
+                class="tag-remove"
+                title="Remove tag"
+                @click.stop="removeTag(run, tag)"
+              >
+                &times;
+              </button>
+            </span>
+            <span v-if="taggingRunId === run.run_id" class="tag-input-wrap">
+              <input
+                ref="tagInputEl"
+                v-model="tagInput"
+                class="tag-input"
+                placeholder="tag name"
+                @keydown.enter="submitTag(run)"
+                @keydown.escape="cancelTagging"
+                @blur="submitTag(run)"
+              />
+            </span>
+            <button
+              v-else
+              class="add-tag-btn"
+              title="Add tag"
+              @click.stop="startTagging(run)"
+            >
+              +
+            </button>
+            <button
+              class="delete-run-btn"
+              title="Delete this run"
+              @click.stop="confirmDelete(run)"
+            >
+              &times;
+            </button>
+          </div>
+          <div class="cards">
+            <eval-card
+              v-for="ev in run.evals"
+              :key="ev.name"
+              :item="ev"
+              :run-id="run.run_id"
+              :compare-mode="compareMode"
+              :is-selected="isSelected(run.run_id, ev.name)"
+              :can-select="canSelect(ev)"
+              @click="handleCardClick(run, ev, $event)"
+              @toggle="toggleSelection(run.run_id, ev)"
+            />
+          </div>
+        </div>
+      </template>
+
+      <!-- By Eval: group across runs by eval name -->
+      <template v-else>
+        <div
+          v-for="group in groupedByEval"
+          :key="group.evalName"
+          class="eval-group"
+        >
+          <div class="group-header">
+            <span class="group-title">{{ group.evalName }}</span>
+          </div>
+          <div class="cards">
+            <eval-card
+              v-for="entry in group.entries"
+              :key="`${entry.runId}/${entry.eval.name}`"
+              :item="entry.eval"
+              :run-id="entry.runId"
+              :run-timestamp="entry.timestamp"
+              :git-commit="entry.gitCommit"
+              :git-branch="entry.gitBranch"
+              :git-dirty="entry.gitDirty"
+              :tags="entry.tags"
+              show-timestamp-only
+              :compare-mode="compareMode"
+              :is-selected="isSelected(entry.runId, entry.eval.name)"
+              :can-select="canSelect(entry.eval)"
+              @click="
+                handleCardClick({ run_id: entry.runId }, entry.eval, $event)
+              "
+              @toggle="toggleSelection(entry.runId, entry.eval)"
+            />
+          </div>
+        </div>
+      </template>
+    </template>
+
+    <!-- Delete confirmation modal -->
+    <Teleport to="body">
+      <div
+        v-if="runToDelete"
+        class="modal-overlay"
+        @click.self="runToDelete = null"
+      >
+        <div class="modal-box">
+          <div class="modal-header">
+            <h3>Delete Run</h3>
+            <button class="modal-close" @click="runToDelete = null">
+              &times;
+            </button>
+          </div>
+          <div class="modal-body">
+            <p>
+              Delete run from
+              <strong>{{ formatDate(runToDelete.timestamp) }}</strong
+              >?
+            </p>
+            <p class="modal-detail">
+              This will remove {{ runToDelete.evals.length }} eval(s)
+              permanently.
+            </p>
+          </div>
+          <div class="modal-footer">
+            <button class="modal-cancel" @click="runToDelete = null">
+              Cancel
+            </button>
+            <button class="modal-confirm" @click="deleteRun">Delete</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+  </div>
+</template>
+
+<script>
+// Module-level: survives component unmount/remount within the SPA session
+let rememberedGroupBy = "timestamp";
+</script>
+
+<script setup>
+import { ref, computed, onMounted, nextTick, watch } from "vue";
+import { useRouter } from "vue-router";
+import EvalCard from "./EvalCard.vue";
+
+const router = useRouter();
+
+const runs = ref([]);
+const loading = ref(true);
+const error = ref(null);
+const compareMode = ref(false);
+// Each entry is "runId:evalName"
+const selectedForCompare = ref([]);
+const groupBy = ref(rememberedGroupBy);
+watch(groupBy, (v) => (rememberedGroupBy = v));
+const runToDelete = ref(null);
+
+async function fetchRuns() {
+  try {
+    const response = await fetch("/api/evals");
+    if (!response.ok) throw new Error("Failed to fetch evals");
+    runs.value = await response.json();
+  } catch (e) {
+    error.value = e.message;
+  } finally {
+    loading.value = false;
+  }
+}
+
+const groupedByEval = computed(() => {
+  const groups = {};
+  for (const run of runs.value) {
+    for (const ev of run.evals) {
+      if (!groups[ev.name]) {
+        groups[ev.name] = [];
+      }
+      groups[ev.name].push({
+        runId: run.run_id,
+        timestamp: run.timestamp,
+        gitCommit: run.git_commit,
+        gitBranch: run.git_branch,
+        gitDirty: run.git_dirty,
+        tags: run.tags,
+        eval: ev,
+      });
+    }
+  }
+  // Sort entries within each group by run timestamp (newest first)
+  for (const entries of Object.values(groups)) {
+    entries.sort((a, b) => {
+      if (a.timestamp && b.timestamp) {
+        return new Date(b.timestamp) - new Date(a.timestamp);
+      }
+      return b.runId.localeCompare(a.runId);
+    });
+  }
+  // Sort groups by most recent entry
+  return Object.entries(groups)
+    .map(([evalName, entries]) => ({ evalName, entries }))
+    .sort((a, b) => {
+      const aTime = a.entries[0]?.timestamp;
+      const bTime = b.entries[0]?.timestamp;
+      if (aTime && bTime) return new Date(bTime) - new Date(aTime);
+      return a.evalName.localeCompare(b.evalName);
+    });
+});
+
+function formatDate(timestamp) {
+  if (!timestamp) return "Unknown date";
+  return new Date(timestamp).toLocaleString();
+}
+
+function makeKey(runId, evalName) {
+  return `${runId}:${evalName}`;
+}
+
+const selectedEvalType = computed(() => {
+  if (selectedForCompare.value.length === 0) return null;
+  return selectedForCompare.value[0].split(":")[1];
+});
+
+function canSelect(ev) {
+  if (selectedForCompare.value.length === 0) return true;
+  return ev.name === selectedEvalType.value;
+}
+
+function isSelected(runId, evalName) {
+  return selectedForCompare.value.includes(makeKey(runId, evalName));
+}
+
+function toggleSelection(runId, ev) {
+  const key = makeKey(runId, ev.name);
+  const idx = selectedForCompare.value.indexOf(key);
+  if (idx === -1) {
+    if (canSelect(ev)) {
+      selectedForCompare.value.push(key);
+    }
+  } else {
+    selectedForCompare.value.splice(idx, 1);
+  }
+}
+
+function toggleCompareMode() {
+  compareMode.value = !compareMode.value;
+  if (!compareMode.value) {
+    selectedForCompare.value = [];
+  }
+}
+
+function handleCardClick(run, ev, event) {
+  if (compareMode.value) {
+    if (canSelect(ev)) {
+      toggleSelection(run.run_id, ev);
+    }
+  } else {
+    router.push(`/eval/${run.run_id}/${ev.name}`);
+  }
+}
+
+function goToCompare() {
+  if (selectedForCompare.value.length >= 2) {
+    const params = selectedForCompare.value.join(",");
+    router.push(`/compare?runs=${encodeURIComponent(params)}`);
+  }
+}
+
+const taggingRunId = ref(null);
+const tagInput = ref("");
+const tagInputEl = ref(null);
+
+async function startTagging(run) {
+  taggingRunId.value = run.run_id;
+  tagInput.value = "";
+  await nextTick();
+  if (tagInputEl.value) {
+    const el = Array.isArray(tagInputEl.value)
+      ? tagInputEl.value[0]
+      : tagInputEl.value;
+    el?.focus();
+  }
+}
+
+function cancelTagging() {
+  taggingRunId.value = null;
+  tagInput.value = "";
+}
+
+async function submitTag(run) {
+  const tag = tagInput.value.trim();
+  taggingRunId.value = null;
+  tagInput.value = "";
+  if (!tag) return;
+
+  try {
+    const response = await fetch(
+      `/api/evals/${encodeURIComponent(run.run_id)}/tags`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tag }),
+      },
+    );
+    if (!response.ok) throw new Error("Failed to add tag");
+    const { tags: userTags } = await response.json();
+    // Update the run in place
+    if (!run.user_tags) run.user_tags = [];
+    run.user_tags = userTags;
+    if (!run.tags.includes(tag)) {
+      run.tags.push(tag);
+    }
+  } catch (e) {
+    error.value = e.message;
+  }
+}
+
+async function removeTag(run, tag) {
+  try {
+    const response = await fetch(
+      `/api/evals/${encodeURIComponent(run.run_id)}/tags/${encodeURIComponent(tag)}`,
+      { method: "DELETE" },
+    );
+    if (!response.ok) throw new Error("Failed to remove tag");
+    const { tags: userTags } = await response.json();
+    run.user_tags = userTags;
+    run.tags = run.tags.filter((t) => t !== tag);
+  } catch (e) {
+    error.value = e.message;
+  }
+}
+
+function confirmDelete(run) {
+  runToDelete.value = run;
+}
+
+async function deleteRun() {
+  const run = runToDelete.value;
+  if (!run) return;
+  runToDelete.value = null;
+  try {
+    const response = await fetch(
+      `/api/evals/${encodeURIComponent(run.run_id)}`,
+      {
+        method: "DELETE",
+      },
+    );
+    if (!response.ok) throw new Error("Failed to delete run");
+    runs.value = runs.value.filter((r) => r.run_id !== run.run_id);
+  } catch (e) {
+    error.value = e.message;
+  }
+}
+
+onMounted(fetchRuns);
+</script>
+
+<style scoped>
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.header-row h1 {
+  margin: 0;
+}
+
+.header-controls {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.group-controls {
+  display: flex;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.group-btn {
+  padding: 0.4rem 0.75rem;
+  border: none;
+  background: white;
+  color: #666;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.2s;
+}
+
+.group-btn:not(:last-child) {
+  border-right: 1px solid #ccc;
+}
+
+.group-btn.active {
+  background: #3498db;
+  color: white;
+}
+
+.group-btn:hover:not(.active) {
+  background: #f0f7ff;
+}
+
+.compare-controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.toggle-compare-btn {
+  padding: 0.5rem 1rem;
+  border: 1px solid #3498db;
+  background: white;
+  color: #3498db;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+}
+
+.toggle-compare-btn:hover {
+  background: #f0f7ff;
+}
+
+.toggle-compare-btn.active {
+  background: #3498db;
+  color: white;
+}
+
+.compare-btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  background: #27ae60;
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.compare-btn:hover {
+  background: #219a52;
+}
+
+.compare-hint {
+  background: #e8f4fd;
+  border: 1px solid #bee5eb;
+  color: #0c5460;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+}
+
+.loading,
+.error,
+.empty {
+  padding: 2rem;
+  text-align: center;
+  color: #666;
+}
+
+.error {
+  color: #c0392b;
+}
+
+.eval-group {
+  margin-bottom: 2rem;
+}
+
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.group-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.git-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  font-family: monospace;
+  background: #f0f0f0;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  color: #555;
+}
+
+.git-icon {
+  font-size: 0.875rem;
+}
+
+.git-branch {
+  color: #888;
+  margin-left: 0.25rem;
+}
+
+.tag-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.7rem;
+  background: #e8d4f8;
+  color: #6b21a8;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.tag-badge.user-tag {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.tag-remove {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 0.8rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.5;
+}
+
+.tag-remove:hover {
+  opacity: 1;
+}
+
+.add-tag-btn {
+  background: none;
+  border: 1px dashed #ccc;
+  color: #999;
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  transition: all 0.15s;
+}
+
+.add-tag-btn:hover {
+  border-color: #6b21a8;
+  color: #6b21a8;
+  background: #f5f0ff;
+}
+
+.tag-input-wrap {
+  display: inline-flex;
+}
+
+.tag-input {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid #6b21a8;
+  border-radius: 3px;
+  outline: none;
+  width: 80px;
+  font-family: inherit;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+.delete-run-btn {
+  margin-left: auto;
+  background: none;
+  border: 1px solid transparent;
+  color: #999;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.delete-run-btn:hover {
+  color: #c0392b;
+  border-color: #c0392b;
+  background: #fdf0ef;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-box {
+  background: #fff;
+  border-radius: 8px;
+  width: min(90vw, 400px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #666;
+  line-height: 1;
+}
+
+.modal-body {
+  padding: 1rem;
+}
+
+.modal-body p {
+  margin: 0 0 0.5rem;
+}
+
+.modal-detail {
+  color: #666;
+  font-size: 0.875rem;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid #e0e0e0;
+}
+
+.modal-cancel {
+  padding: 0.4rem 0.75rem;
+  border: 1px solid #ccc;
+  background: white;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.modal-cancel:hover {
+  background: #f5f5f5;
+}
+
+.modal-confirm {
+  padding: 0.4rem 0.75rem;
+  border: none;
+  background: #c0392b;
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.modal-confirm:hover {
+  background: #a93226;
+}
+</style>
