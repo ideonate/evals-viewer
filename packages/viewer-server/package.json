@@ -1,13 +1,37 @@
 {
-  "name": "@evals-viewer/server",
+  "name": "@ideonate/evals-viewer-server",
   "version": "0.0.1",
   "type": "module",
-  "description": "Vite plugin and middleware exposing the filesystem-backed evals viewer API.",
+  "description": "Vite plugin and middleware exposing the filesystem-backed evals-viewer API, plus reusable building blocks (composeLoaders, datasetCaseLoader, …) for assembling a custom caseDataLoader.",
+  "keywords": [
+    "evals",
+    "llm",
+    "vite",
+    "vite-plugin",
+    "viewer",
+    "evaluation"
+  ],
+  "license": "MIT",
+  "author": "Dan Lester",
+  "homepage": "https://github.com/ideonate/evals-viewer#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ideonate/evals-viewer.git",
+    "directory": "packages/viewer-server"
+  },
+  "bugs": {
+    "url": "https://github.com/ideonate/evals-viewer/issues"
+  },
   "main": "src/index.js",
   "exports": {
     ".": "./src/index.js"
   },
   "files": [
-    "src"
-  ]
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }

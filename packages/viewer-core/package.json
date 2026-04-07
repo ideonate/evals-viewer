@@ -1,16 +1,39 @@
 {
-  "name": "@evals-viewer/core",
+  "name": "@ideonate/evals-viewer-core",
   "version": "0.0.1",
   "type": "module",
-  "description": "Reusable Vue 3 components and composables for the evals viewer framework.",
+  "description": "Reusable Vue 3 components, composables, router factory, and inspector registry for the evals-viewer framework — a lightweight, configurable viewer for LLM evaluation results.",
+  "keywords": [
+    "evals",
+    "llm",
+    "vue",
+    "vue3",
+    "viewer",
+    "evaluation"
+  ],
+  "license": "MIT",
+  "author": "Dan Lester",
+  "homepage": "https://github.com/ideonate/evals-viewer#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ideonate/evals-viewer.git",
+    "directory": "packages/viewer-core"
+  },
+  "bugs": {
+    "url": "https://github.com/ideonate/evals-viewer/issues"
+  },
   "main": "src/index.js",
   "exports": {
-    ".": "./src/index.js",
-    "./style.css": "./src/style.css"
+    ".": "./src/index.js"
   },
   "files": [
-    "src"
+    "src",
+    "README.md",
+    "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "peerDependencies": {
     "vue": "^3.4.0",
     "vue-router": "^4.2.0"

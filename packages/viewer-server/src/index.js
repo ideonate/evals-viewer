@@ -11,7 +11,7 @@ export {
 /**
  * Vite plugin wrapping the evals API middleware.
  *
- *   import { evalsViewerPlugin } from "@evals-viewer/server";
+ *   import { evalsViewerPlugin } from "@ideonate/evals-viewer-server";
  *
  *   export default defineConfig({
  *     plugins: [

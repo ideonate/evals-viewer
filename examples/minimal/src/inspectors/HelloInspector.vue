@@ -14,7 +14,7 @@
 
 <script setup>
 import { computed } from "vue";
-import { CaseInspectorLayout, useCaseInspector } from "@evals-viewer/core";
+import { CaseInspectorLayout, useCaseInspector } from "@ideonate/evals-viewer-core";
 
 const { loading, error, caseData, runId, evalName, caseName } =
   useCaseInspector();

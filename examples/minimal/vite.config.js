@@ -2,7 +2,7 @@ import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 import { fileURLToPath } from "url";
 import { dirname, resolve } from "path";
-import { evalsViewerPlugin } from "@evals-viewer/server";
+import { evalsViewerPlugin } from "@ideonate/evals-viewer-server";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 

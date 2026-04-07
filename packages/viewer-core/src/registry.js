@@ -38,7 +38,7 @@ export function createCompareRegistry(compareMap = {}) {
  *
  * Convention: each file's basename (without .vue) is the eval name.
  *
- *   import { inspectorsFromGlob } from "@evals-viewer/core";
+ *   import { inspectorsFromGlob } from "@ideonate/evals-viewer-core";
  *   export const inspectors = inspectorsFromGlob(
  *     import.meta.glob("./inspectors/*.vue", { eager: true }),
  *   );

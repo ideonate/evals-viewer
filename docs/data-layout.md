@@ -1,6 +1,6 @@
 # On-disk data layout
 
-This is the public contract between eval writers (Python, see `evals-viewer-io`) and the viewer server (`@evals-viewer/server`). Anything that produces files matching this layout can be browsed by the viewer.
+This is the public contract between eval writers (Python, see `evals-viewer-io`) and the viewer server (`@ideonate/evals-viewer-server`). Anything that produces files matching this layout can be browsed by the viewer.
 
 ## Directory tree
 
@@ -99,7 +99,7 @@ A bare JSON array of strings, written by the viewer UI when users add tags. Kept
 ["interesting", "regression"]
 ```
 
-## API surface served by `@evals-viewer/server`
+## API surface served by `@ideonate/evals-viewer-server`
 
 | Method | Path                                                | Purpose                          |
 | ------ | --------------------------------------------------- | -------------------------------- |

@@ -1,6 +1,6 @@
 ---
 name: evals-viewer-init
-description: Use when the user wants to set up the evals-viewer framework in a new or existing project — wiring up @evals-viewer/core and @evals-viewer/server, creating the Vite config, the AppShell entry point, the inspector and compare auto-discovery folders, and (optionally) the Python evals-viewer-io writer plus pytest fixture. Triggers on phrases like "set up evals viewer," "wire up evals-viewer here," "add the evals viewer to this project."
+description: Use when the user wants to set up the evals-viewer framework in a new or existing project — wiring up @ideonate/evals-viewer-core and @ideonate/evals-viewer-server, creating the Vite config, the AppShell entry point, the inspector and compare auto-discovery folders, and (optionally) the Python evals-viewer-io writer plus pytest fixture. Triggers on phrases like "set up evals viewer," "wire up evals-viewer here," "add the evals viewer to this project."
 ---
 
 # Setting up evals-viewer in a consumer project
@@ -35,8 +35,8 @@ Add to `package.json` dependencies (use the answer from Q3):
 ```json
 {
   "dependencies": {
-    "@evals-viewer/core": "^0.0.1",
-    "@evals-viewer/server": "^0.0.1",
+    "@ideonate/evals-viewer-core": "^0.0.1",
+    "@ideonate/evals-viewer-server": "^0.0.1",
     "vue": "^3.4.0",
     "vue-router": "^4.2.0"
   },
@@ -65,7 +65,7 @@ import {
   resolveResultsDir,
   composeLoaders,
   staticCaseInputLoader,
-} from "@evals-viewer/server";
+} from "@ideonate/evals-viewer-server";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -111,7 +111,7 @@ import {
   createEvalsRouter,
   installInspectors,
   installCompares,
-} from "@evals-viewer/core";
+} from "@ideonate/evals-viewer-core";
 import { inspectors, compares } from "./registry.js";
 
 const app = createApp({
@@ -127,7 +127,7 @@ app.mount("#app");
 Create `src/registry.js`:
 
 ```js
-import { inspectorsFromGlob } from "@evals-viewer/core";
+import { inspectorsFromGlob } from "@ideonate/evals-viewer-core";
 
 // Drop a new file in src/inspectors/{eval_name}.vue → it auto-registers.
 export const inspectors = inspectorsFromGlob(

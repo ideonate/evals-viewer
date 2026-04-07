@@ -6,7 +6,7 @@
  *     staticCaseInputLoader,
  *     datasetCaseLoader,
  *     resolveResultsDir,
- *   } from "@evals-viewer/server";
+ *   } from "@ideonate/evals-viewer-server";
  */
 
 import { readFile, readdir } from "fs/promises";

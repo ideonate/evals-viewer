@@ -9,8 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@evals-viewer/core": "*",
-    "@evals-viewer/server": "*",
+    "@ideonate/evals-viewer-core": "*",
+    "@ideonate/evals-viewer-server": "*",
     "vue": "^3.4.0",
     "vue-router": "^4.2.0"
   },

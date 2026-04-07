@@ -1,4 +1,4 @@
-// Public API for @evals-viewer/core
+// Public API for @ideonate/evals-viewer-core
 
 export { createEvalsRouter } from "./router.js";
 export {
@@ -33,7 +33,7 @@ export { default as CaseCompareRouter } from "./components/CaseCompareRouter.vue
  *
  * Usage:
  *   import { createApp } from "vue";
- *   import { createEvalsRouter, installInspectors } from "@evals-viewer/core";
+ *   import { createEvalsRouter, installInspectors } from "@ideonate/evals-viewer-core";
  *   const app = createApp(App);
  *   app.use(createEvalsRouter());
  *   installInspectors(app, { my_eval: MyInspector });

@@ -53,7 +53,7 @@ Create `src/inspectors/{eval_name}.vue`:
 
 <script setup>
 import { computed } from "vue";
-import { CaseInspectorLayout, useCaseInspector } from "@evals-viewer/core";
+import { CaseInspectorLayout, useCaseInspector } from "@ideonate/evals-viewer-core";
 
 const { loading, error, caseData, runId, evalName, caseName } =
   useCaseInspector();
@@ -112,7 +112,7 @@ Create `src/compares/{eval_name}.vue`:
 </template>
 
 <script setup>
-import { CaseCompareView } from "@evals-viewer/core";
+import { CaseCompareView } from "@ideonate/evals-viewer-core";
 </script>
 
 <style scoped>

@@ -3,7 +3,7 @@ import {
   AppShell,
   createEvalsRouter,
   installInspectors,
-} from "@evals-viewer/core";
+} from "@ideonate/evals-viewer-core";
 import HelloInspector from "./inspectors/HelloInspector.vue";
 
 const app = createApp({
