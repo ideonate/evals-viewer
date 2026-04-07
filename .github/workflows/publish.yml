@@ -22,21 +22,19 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: "20"
-          registry-url: "https://registry.npmjs.org"
-
-      - name: Configure git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          node-version: "24"
+          # NB: deliberately no `registry-url` here. Setting it would write a
+          # .npmrc using ${NODE_AUTH_TOKEN}, which prevents npm from falling
+          # through to OIDC trusted publishing — leading to a misleading
+          # "404 Not Found" on publish.
 
       - name: Install workspace deps
         run: npm ci
@@ -47,8 +45,8 @@ jobs:
       - name: Bump versions in both packages
         id: bump
         run: |
-          # `npm version` updates package.json (and package-lock.json) without
-          # tagging. Both packages are kept in lockstep on a single version.
+          # `npm version` updates package.json without git-tagging.
+          # Both packages are kept in lockstep on a single version.
           npm version ${{ inputs.bump_type }} \
             -w packages/viewer-core \
             -w packages/viewer-server \
@@ -58,6 +56,20 @@ jobs:
           echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
           echo "Bumped to v$NEW_VERSION"
 
+      # Publish FIRST, push the bump SECOND. If a publish fails we leave the
+      # bump uncommitted, so a re-run starts cleanly from the same base.
+
+      - name: Publish @ideonate/evals-viewer-core
+        run: npm publish -w packages/viewer-core --provenance --access public
+
+      - name: Publish @ideonate/evals-viewer-server
+        run: npm publish -w packages/viewer-server --provenance --access public
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
       - name: Commit, tag, push
         run: |
           git add packages/viewer-core/package.json \
@@ -66,9 +78,3 @@ jobs:
           git commit -m "Release v${{ steps.bump.outputs.new_version }}"
           git tag "v${{ steps.bump.outputs.new_version }}"
           git push origin HEAD --tags
-
-      - name: Publish @ideonate/evals-viewer-core
-        run: npm publish -w packages/viewer-core --provenance --access public
-
-      - name: Publish @ideonate/evals-viewer-server
-        run: npm publish -w packages/viewer-server --provenance --access public
