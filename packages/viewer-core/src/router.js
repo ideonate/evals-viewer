@@ -3,7 +3,7 @@ import EvalsList from "./components/EvalsList.vue";
 import EvalDetail from "./components/EvalDetail.vue";
 import CaseInspectorRouter from "./components/CaseInspectorRouter.vue";
 import CompareEvals from "./components/CompareEvals.vue";
-import CaseCompareView from "./components/CaseCompareView.vue";
+import CaseCompareRouter from "./components/CaseCompareRouter.vue";
 
 /**
  * Build the standard evals viewer router.
@@ -23,7 +23,7 @@ export function createEvalsRouter({ history, extraRoutes = [] } = {}) {
       component: CaseInspectorRouter,
     },
     { path: "/compare", component: CompareEvals },
-    { path: "/compare/case/:caseName", component: CaseCompareView },
+    { path: "/compare/case/:caseName", component: CaseCompareRouter },
   ];
 
   return createRouter({

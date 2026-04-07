@@ -1,6 +1,12 @@
 import { createEvalsApiMiddleware } from "./api.js";
 
 export { createEvalsApiMiddleware };
+export {
+  composeLoaders,
+  datasetCaseLoader,
+  resolveResultsDir,
+  staticCaseInputLoader,
+} from "./loaders.js";
 
 /**
  * Vite plugin wrapping the evals API middleware.

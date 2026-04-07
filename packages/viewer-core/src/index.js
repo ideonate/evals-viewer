@@ -3,8 +3,12 @@
 export { createEvalsRouter } from "./router.js";
 export {
   INSPECTOR_REGISTRY,
+  COMPARE_REGISTRY,
   createInspectorRegistry,
+  createCompareRegistry,
+  inspectorsFromGlob,
   useInspectorRegistry,
+  useCompareRegistry,
 } from "./registry.js";
 export {
   CASE_INSPECTOR_DATA,
@@ -22,6 +26,7 @@ export { default as EvalsList } from "./components/EvalsList.vue";
 export { default as EvalDetail } from "./components/EvalDetail.vue";
 export { default as CompareEvals } from "./components/CompareEvals.vue";
 export { default as CaseCompareView } from "./components/CaseCompareView.vue";
+export { default as CaseCompareRouter } from "./components/CaseCompareRouter.vue";
 
 /**
  * Convenience: install the inspector registry on a Vue app.
@@ -33,7 +38,17 @@ export { default as CaseCompareView } from "./components/CaseCompareView.vue";
  *   app.use(createEvalsRouter());
  *   installInspectors(app, { my_eval: MyInspector });
  */
-import { createInspectorRegistry, INSPECTOR_REGISTRY } from "./registry.js";
+import {
+  createInspectorRegistry,
+  createCompareRegistry,
+  INSPECTOR_REGISTRY,
+  COMPARE_REGISTRY,
+} from "./registry.js";
+
 export function installInspectors(app, inspectorMap) {
   app.provide(INSPECTOR_REGISTRY, createInspectorRegistry(inspectorMap));
+}
+
+export function installCompares(app, compareMap) {
+  app.provide(COMPARE_REGISTRY, createCompareRegistry(compareMap));
 }
