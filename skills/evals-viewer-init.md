@@ -83,6 +83,14 @@ export default defineConfig({
       // and datasetCaseLoader helpers.
     }),
   ],
+  // REQUIRED: force a single instance of vue and vue-router.
+  // @ideonate/evals-viewer-core ships raw .vue source, and without this
+  // Vite can resolve "vue-router" from inside node_modules differently
+  // than from the project root, ending up with two router instances and
+  // a useRouter() that returns undefined at click time. Don't omit.
+  resolve: {
+    dedupe: ["vue", "vue-router"],
+  },
 });
 ```
 

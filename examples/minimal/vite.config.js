@@ -13,6 +13,13 @@ export default defineConfig({
       resultsDir: resolve(__dirname, "test-results/evals"),
     }),
   ],
+  // Force a single instance of vue and vue-router. @ideonate/evals-viewer-core
+  // ships raw .vue source, so without dedupe Vite can resolve "vue-router"
+  // from inside node_modules differently than from this project root, ending
+  // up with two router instances and a useRouter() that returns undefined.
+  resolve: {
+    dedupe: ["vue", "vue-router"],
+  },
   server: {
     port: 5173,
     host: "0.0.0.0",
