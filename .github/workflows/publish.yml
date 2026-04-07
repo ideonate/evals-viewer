@@ -1,4 +1,4 @@
-name: Publish to npm
+name: Publish (npm + PyPI)
 
 on:
   workflow_dispatch:
@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write   # commit the version bump and push the tag
-      id-token: write   # OIDC token for npm trusted publishing
+      id-token: write   # OIDC token for npm + PyPI trusted publishing
 
     steps:
       - name: Checkout
@@ -32,21 +32,27 @@ jobs:
         with:
           node-version: "24"
           # NB: deliberately no `registry-url` here. Setting it would write a
-          # .npmrc using ${NODE_AUTH_TOKEN}, which prevents npm from falling
-          # through to OIDC trusted publishing — leading to a misleading
-          # "404 Not Found" on publish.
+          # .npmrc using ${NODE_AUTH_TOKEN}, which prevents npm from attempting
+          # OIDC trusted publishing — leading to a misleading 404 on publish.
 
-      - name: Install workspace deps
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install workspace deps (npm)
         run: npm ci
+
+      - name: Install Python build tools
+        run: python -m pip install --upgrade pip build
 
       - name: Sanity build (example app)
         run: npm run build -w examples/minimal
 
-      - name: Bump versions in both packages
+      - name: Bump versions in all three packages (lockstep)
         id: bump
         run: |
-          # `npm version` updates package.json without git-tagging.
-          # Both packages are kept in lockstep on a single version.
+          # Bump the two npm packages.
           npm version ${{ inputs.bump_type }} \
             -w packages/viewer-core \
             -w packages/viewer-server \
@@ -54,15 +60,47 @@ jobs:
 
           NEW_VERSION=$(node -p "require('./packages/viewer-core/package.json').version")
           echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
-          echo "Bumped to v$NEW_VERSION"
 
-      # Publish FIRST, push the bump SECOND. If a publish fails we leave the
-      # bump uncommitted, so a re-run starts cleanly from the same base.
+          # Bump the Python package's pyproject.toml to the same version.
+          # Anchored to start-of-line so we only touch the [project] table
+          # entry, never a transitive dependency pin.
+          NEW_VERSION="$NEW_VERSION" python - <<'PY'
+          import os, re, pathlib
+          new_version = os.environ["NEW_VERSION"]
+          path = pathlib.Path("packages/pydantic-evals-io/pyproject.toml")
+          text = path.read_text()
+          new = re.sub(
+              r'^version = "[^"]+"',
+              f'version = "{new_version}"',
+              text,
+              count=1,
+              flags=re.MULTILINE,
+          )
+          assert new != text, "pyproject.toml version line not found"
+          path.write_text(new)
+          PY
 
-      - name: Publish @ideonate/evals-viewer-core
+          echo "Bumped all packages to v$NEW_VERSION"
+
+      - name: Build Python distribution
+        run: |
+          rm -rf packages/pydantic-evals-io/dist
+          cd packages/pydantic-evals-io
+          python -m build
+
+      # Publish in dependency order: schemas/writer first (Python), then JS
+      # halves. Each step is independent — if one fails the bump stays
+      # uncommitted so a re-run starts cleanly from the same base.
+
+      - name: Publish evals-viewer-io to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: packages/pydantic-evals-io/dist/
+
+      - name: Publish @ideonate/evals-viewer-core to npm
         run: npm publish -w packages/viewer-core --provenance --access public
 
-      - name: Publish @ideonate/evals-viewer-server
+      - name: Publish @ideonate/evals-viewer-server to npm
         run: npm publish -w packages/viewer-server --provenance --access public
 
       - name: Configure git
@@ -74,6 +112,7 @@ jobs:
         run: |
           git add packages/viewer-core/package.json \
                   packages/viewer-server/package.json \
+                  packages/pydantic-evals-io/pyproject.toml \
                   package-lock.json
           git commit -m "Release v${{ steps.bump.outputs.new_version }}"
           git tag "v${{ steps.bump.outputs.new_version }}"
