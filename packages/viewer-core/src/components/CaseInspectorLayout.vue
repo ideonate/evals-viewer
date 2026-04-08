@@ -18,6 +18,17 @@
         <div class="header-left">
           <h1>{{ caseName }}</h1>
           <div class="case-meta">
+            <div v-if="caseData.caseInput?.description" class="case-description">
+              {{ caseData.caseInput.description }}
+            </div>
+            <div v-if="tags.length" class="meta-tags">
+              <span
+                v-for="tag in tags"
+                :key="tag.label"
+                class="meta-tag"
+                :class="tag.class"
+              >{{ tag.label }}</span>
+            </div>
             <slot name="meta" />
           </div>
           <div
@@ -34,19 +45,18 @@
               &middot; ${{ caseData.output.cost_usd.toFixed(4) }}
             </span>
             <span
-              v-if="caseData.output?.usage_by_model"
+              v-if="modelKeys.length"
               class="token-by-model-inline"
             >
-              (<span
+              &middot;
+              <template v-if="multipleModels">(</template
+              ><span
                 v-for="(usage, model, idx) in caseData.output.usage_by_model"
                 :key="model"
-                >{{ idx > 0 ? ", " : "" }}{{ model }}:
-                {{ usage.input_tokens.toLocaleString() }}/{{
-                  usage.output_tokens.toLocaleString()
-                }}<template v-if="usage.cost_usd != null">
+                >{{ idx > 0 ? ", " : "" }}{{ model }}<template v-if="usage.cost_usd != null && multipleModels">
                   ${{ usage.cost_usd.toFixed(4) }}</template
                 ></span
-              >)
+              ><template v-if="multipleModels">)</template>
             </span>
           </div>
         </div>
@@ -101,20 +111,28 @@
 </template>
 
 <script setup>
-import { inject } from "vue";
+import { inject, computed } from "vue";
 import { formatEvaluatorName, getScoreClass } from "../utils/evalHelpers.js";
 import { CASE_INSPECTOR_DATA } from "../composables/useCaseInspector.js";
 
-defineProps({
+const props = defineProps({
   runId: { type: String, required: true },
   evalName: { type: String, required: true },
   caseName: { type: String, required: true },
   loading: { type: Boolean, default: false },
   error: { type: String, default: null },
   caseData: { type: Object, default: () => ({}) },
+  tags: { type: Array, default: () => [] },
 });
 
 const embedded = inject(CASE_INSPECTOR_DATA, null) !== null;
+
+const modelKeys = computed(() => {
+  const ubm = props.caseData?.output?.usage_by_model;
+  return ubm ? Object.keys(ubm) : [];
+});
+
+const multipleModels = computed(() => modelKeys.value.length > 1);
 </script>
 
 <style>
@@ -139,6 +157,37 @@ const embedded = inject(CASE_INSPECTOR_DATA, null) !== null;
 .case-meta { color: #666; font-size: 0.875rem; }
 .token-usage { font-size: 0.75rem; color: #666; margin-top: 0.25rem; }
 .token-by-model-inline { color: #999; }
+
+/* Description + tag pills — shared across all inspectors */
+.case-description {
+  font-size: 0.8rem;
+  color: #6c757d;
+  font-style: italic;
+  max-width: 600px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 0.25rem;
+}
+.meta-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-top: 0.125rem;
+}
+.meta-tag {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 3px;
+}
+.tag-info    { background: #cce5ff; color: #004085; }
+.tag-neutral { background: #e9ecef; color: #495057; }
+.tag-warning { background: #fff3cd; color: #856404; }
+.tag-good    { background: #d4edda; color: #155724; }
+.tag-danger  { background: #f8d7da; color: #721c24; }
+.tag-error   { background: #f8d7da; color: #721c24; }
 
 .stats-bar { display: flex; flex-wrap: wrap; gap: 0.75rem; }
 .stat-card {
