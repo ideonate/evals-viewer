@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "evals-viewer-io"
-version = "0.0.3"
+version = "0.0.4"
 description = "Pydantic schemas and a writer for the evals-viewer on-disk format — the Python writer side of the evals-viewer framework."
 readme = "README.md"
 requires-python = ">=3.10"
