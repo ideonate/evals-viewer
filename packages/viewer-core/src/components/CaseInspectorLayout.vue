@@ -163,10 +163,6 @@ const multipleModels = computed(() => modelKeys.value.length > 1);
   font-size: 0.8rem;
   color: #6c757d;
   font-style: italic;
-  max-width: 600px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   margin-bottom: 0.25rem;
 }
 .meta-tags {
