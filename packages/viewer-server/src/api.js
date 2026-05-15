@@ -211,6 +211,17 @@ export function createEvalsApiMiddleware(options) {
       let integrity = null;
       let judgeReasons = null;
       let questionScores = null;
+      let logfireProjectUrl = null;
+
+      const runJsonPath = join(RESULTS_DIR, runId, "run.json");
+      if (existsSync(runJsonPath)) {
+        try {
+          const runMeta = await readJson(runJsonPath);
+          if (runMeta.logfire_project_url) logfireProjectUrl = runMeta.logfire_project_url;
+        } catch {
+          /* ignore */
+        }
+      }
 
       const summaryPath = join(evalDir, "summary.json");
       if (existsSync(summaryPath)) {
@@ -270,6 +281,7 @@ export function createEvalsApiMiddleware(options) {
         integrity,
         questionScores,
         judgeReasons,
+        logfireProjectUrl,
         ...extras,
       });
     } catch (err) {

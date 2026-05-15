@@ -59,6 +59,11 @@
               ><template v-if="multipleModels">)</template>
             </span>
           </div>
+          <div v-if="logfireTraceUrl" class="logfire-link-row">
+            <a :href="logfireTraceUrl" target="_blank" rel="noopener" class="logfire-link">
+              Logfire ↗
+            </a>
+          </div>
         </div>
         <div v-if="caseData.scores" class="stats-bar">
           <div
@@ -126,13 +131,22 @@ const props = defineProps({
 });
 
 const embedded = inject(CASE_INSPECTOR_DATA, null) !== null;
-
 const modelKeys = computed(() => {
   const ubm = props.caseData?.output?.usage_by_model;
   return ubm ? Object.keys(ubm) : [];
 });
 
 const multipleModels = computed(() => modelKeys.value.length > 1);
+
+const logfireTraceUrl = computed(() => {
+  const traceId = props.caseData?.output?.logfire_trace_id;
+  const projectUrl = props.caseData?.logfireProjectUrl;
+  if (!traceId || !projectUrl) return null;
+  const spanId = props.caseData?.output?.logfire_span_id;
+  const params = new URLSearchParams({ traceId });
+  if (spanId) params.set("spanId", spanId);
+  return `${projectUrl}?${params}`;
+});
 </script>
 
 <style>
@@ -219,6 +233,20 @@ const multipleModels = computed(() => modelKeys.value.length > 1);
 .score-medium { color: #856404; }
 .score-low { color: #721c24; }
 .score-unknown { color: #999; }
+
+.logfire-link-row { margin-top: 0.25rem; }
+.logfire-link {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #e76e39;
+  text-decoration: none;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid #f3b48a;
+  border-radius: 3px;
+  background: #fff7f3;
+}
+.logfire-link:hover { background: #fde9d9; border-color: #e76e39; }
 
 .loading, .error { padding: 2rem; text-align: center; }
 .error { color: #c0392b; }
