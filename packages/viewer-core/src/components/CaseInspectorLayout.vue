@@ -145,6 +145,15 @@ const logfireTraceUrl = computed(() => {
   const spanId = props.caseData?.output?.logfire_span_id;
   const params = new URLSearchParams({ traceId });
   if (spanId) params.set("spanId", spanId);
+  // Trace IDs are ULIDs: first 48 bits (12 hex chars) = millisecond timestamp.
+  // Add since/until so the Logfire time filter includes this trace.
+  try {
+    const tsMs = parseInt(traceId.slice(0, 12), 16);
+    if (tsMs > 0) {
+      params.set("since", new Date(tsMs - 1000).toISOString());
+      params.set("until", new Date(tsMs + 1000).toISOString());
+    }
+  } catch (_) {}
   return `${projectUrl}?${params}`;
 });
 </script>
