@@ -151,7 +151,7 @@ const logfireTraceUrl = computed(() => {
     const tsMs = parseInt(traceId.slice(0, 12), 16);
     if (tsMs > 0) {
       params.set("since", new Date(tsMs - 1000).toISOString());
-      params.set("until", new Date(tsMs + 1000).toISOString());
+      params.set("until", new Date(tsMs + 20 * 60 * 1000).toISOString());
     }
   } catch (_) {}
   return `${projectUrl}?${params}`;
