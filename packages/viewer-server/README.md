@@ -111,3 +111,23 @@ app.use(middleware);
 ## License
 
 MIT
+
+## Serving referenced media (`serveFiles`)
+
+Eval outputs often point at media on disk — persisted browser-session videos, screenshots,
+audio clips — that the inspectors render. The plugin can serve those with HTTP Range
+support (so `<video>` seeking works), path-sandboxed to each mount's root:
+
+```js
+evalsViewerPlugin({
+  resultsDir,
+  serveFiles: [{ prefix: "/api/take-files/", dir: resultsDir }],
+})
+```
+
+`serveFiles` takes one mount or an array; `prefix` defaults to `/api/files/`. Mounts are
+registered **before** the API middleware — that middleware answers (and 404s) every
+`/api/*` URL, so a file route registered after it would never be reached; using
+`serveFiles` instead of a hand-rolled sibling middleware avoids that ordering footgun.
+The underlying factory is exported as `createStaticFilesMiddleware({ dir })` for
+hand-mounting elsewhere.
