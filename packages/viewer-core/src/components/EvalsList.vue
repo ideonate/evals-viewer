@@ -228,8 +228,21 @@
               >?
             </p>
             <p class="modal-detail">
-              This will remove {{ runToDelete.evals.length }} eval(s)
-              permanently.
+              {{ evalCountLabel(runToDelete) }} will be removed permanently.
+            </p>
+            <!-- A shared run is deleted for the whole team, which the run list
+                 gives no hint of. Say so before it happens, not after. -->
+            <p v-if="runToDelete.shared" class="modal-warning">
+              This run is shared. Deleting removes it from
+              <code>{{ remote.url }}</code> for everyone — colleagues lose their
+              copy at their next refresh — as well as deleting yours.
+            </p>
+            <p v-if="runToDelete.shared" class="modal-detail">
+              To take it out of the shared store but keep your own results, use
+              <strong>Unshare</strong> instead.
+            </p>
+            <p v-else class="modal-detail">
+              This run is local — only your copy goes.
             </p>
           </div>
           <div class="modal-footer">
@@ -340,6 +353,11 @@ const groupedByEval = computed(() => {
       return a.evalName.localeCompare(b.evalName);
     });
 });
+
+function evalCountLabel(run) {
+  const n = run.evals.length;
+  return `${n} eval${n === 1 ? "" : "s"}`;
+}
 
 function formatDate(timestamp) {
   if (!timestamp) return "Unknown date";
@@ -917,6 +935,24 @@ onMounted(async () => {
 .modal-detail {
   color: #666;
   font-size: 0.875rem;
+}
+
+.modal-warning {
+  background: #fff5f5;
+  border: 1px solid #f3c9c4;
+  color: #8a2a20;
+  padding: 0.6rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  margin: 0 0 0.5rem;
+}
+
+.modal-warning code {
+  font-size: 0.8rem;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 0.05rem 0.25rem;
+  border-radius: 3px;
+  word-break: break-all;
 }
 
 .modal-footer {
