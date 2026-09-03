@@ -205,6 +205,7 @@ export function createEvalsApiMiddleware(options) {
           shared: isShared,
           can_delete: mirror ? await mirror.canDelete(runId) : true,
           can_share: mirror ? await mirror.canShare(runId) : false,
+          can_unshare: mirror && isShared ? await mirror.isOwn(runId) : false,
           evals,
         });
       }
@@ -406,7 +407,10 @@ export function createEvalsApiMiddleware(options) {
       );
     }
     try {
-      if (mirror && mirror.isRemote(runId)) await mirror.deleteRun(runId);
+      // Not gated on isRemote: that cache is only as fresh as the last index
+      // listing, and a stale one would leave the run in the store while
+      // reporting success. `s3 rm` on an absent prefix is a no-op.
+      if (mirror && (await mirror.isOwn(runId))) await mirror.deleteRun(runId);
       await rm(runDir, { recursive: true, force: true });
       jsonResponse(res, { deleted: runId });
     } catch (err) {
@@ -445,6 +449,30 @@ export function createEvalsApiMiddleware(options) {
     }
   }
 
+  async function handleUnshareRun(req, res, runId) {
+    if (!mirror) {
+      return errorResponse(res, "No shared store is configured", 400);
+    }
+    const runDir = resolveRunDir(runId);
+    if (!runDir) return errorResponse(res, "Invalid run ID", 400);
+    if (!existsSync(runDir) || !statSync(runDir).isDirectory()) {
+      return errorResponse(res, `Run '${runId}' not found`, 404);
+    }
+    if (!(await mirror.isOwn(runId))) {
+      return errorResponse(
+        res,
+        `Run '${runId}' belongs to someone else — only its owner can unshare it`,
+        403,
+      );
+    }
+    try {
+      await mirror.unshareRun(runId);
+      jsonResponse(res, { shared: false, run_id: runId });
+    } catch (err) {
+      errorResponse(res, `Could not unshare run: ${err.message}`);
+    }
+  }
+
   async function handleRemoteStatus(req, res) {
     // Report the identity even with no shared store: the viewer shows who it
     // is running as, which is worth knowing whether or not sharing is on.
@@ -480,6 +508,9 @@ export function createEvalsApiMiddleware(options) {
     const shareMatch = path.match(/^\/api\/evals\/([^/]+)\/share$/);
     if (shareMatch && req.method === "POST") {
       return handleShareRun(req, res, decodeURIComponent(shareMatch[1]));
+    }
+    if (shareMatch && req.method === "DELETE") {
+      return handleUnshareRun(req, res, decodeURIComponent(shareMatch[1]));
     }
 
     const addTagMatch = path.match(/^\/api\/evals\/([^/]+)\/tags$/);

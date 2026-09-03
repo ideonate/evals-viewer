@@ -82,8 +82,9 @@ evalsViewerPlugin({ resultsDir: RESULTS_DIR, remote: mirror });
 ```
 
 A run that was kept local can be shared later with the "Share" button on the run
-list (`POST /api/evals/:runId/share`). Runs are otherwise pushed up by the writer
-side — see
+list (`POST /api/evals/:runId/share`), and retracted again with "Unshare"
+(`DELETE` on the same path), which removes it from the store but keeps your copy.
+Runs are otherwise pushed up by the writer side — see
 [`evals-viewer-io`](https://pypi.org/project/evals-viewer-io/)'s `push_run()`.
 `EVALS_SHARE_PROFILE` picks the AWS profile; `GET /api/remote` reports status and
 why the store is unreachable if it is.

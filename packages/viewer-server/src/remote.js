@@ -15,8 +15,15 @@
  *                      run list can show everyone's runs cheaply.
  *   hydrateRun(runId)  that one run's full tree, once, on first open.
  *
- * Runs are immutable once written, so a sync is always safe to repeat and
- * `--delete` is never passed in either direction.
+ * Runs are immutable once written, so a sync is always safe to repeat.
+ *
+ * `--delete` is never passed in either direction, and must not be: the local
+ * results dir is a *superset* of the store, not a mirror of it. It holds runs
+ * that were never shared — most of them, since sharing is opt-in — and
+ * `--delete` would remove exactly the `run.json` and `summary.json` the index
+ * filter matches, leaving behind orphaned outputs the viewer can no longer
+ * list. Deletions propagate through `pruneDeleted` below instead, which keys
+ * off ownership rather than mirroring.
  *
  * Shelling out to the AWS CLI rather than using the SDK is deliberate: it
  * inherits the developer's SSO session and profile resolution for free, and
@@ -25,7 +32,7 @@
 
 import { execFile, execFileSync } from "child_process";
 import { existsSync } from "fs";
-import { readFile } from "fs/promises";
+import { readdir, readFile, rm } from "fs/promises";
 import { join, resolve } from "path";
 import { promisify } from "util";
 
@@ -163,6 +170,40 @@ export function createRemoteMirror(options) {
     return ids;
   }
 
+  /**
+   * Drop local copies of runs that belonged to someone else and have since
+   * disappeared from the store — the deletion, propagated.
+   *
+   * The ownership rule is what makes this safe: a run is only ever removed if
+   * its `run.json` names somebody other than you. Your own runs and
+   * unattributed ones are never touched, whether or not they are in the store,
+   * so a run you deliberately kept local can't be collected as litter.
+   *
+   * Only ever called after a *successful* listing; an unreachable store must
+   * never be mistaken for an empty one.
+   */
+  async function pruneDeleted() {
+    if (!user) return; // Can't judge ownership without an identity of our own.
+    let entries;
+    try {
+      entries = await readdir(LOCAL, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || remoteRunIds.has(entry.name)) continue;
+      const runJson = join(LOCAL, entry.name, "run.json");
+      if (!existsSync(runJson)) continue;
+      try {
+        const { user: owner } = JSON.parse(await readFile(runJson, "utf-8"));
+        if (!owner || owner === user) continue;
+        await rm(join(LOCAL, entry.name), { recursive: true, force: true });
+      } catch {
+        // A run.json we can't read or a dir we can't remove: leave it alone.
+      }
+    }
+  }
+
   async function doRefreshIndex() {
     const args = ["s3", "sync", `${REMOTE}/`, LOCAL, "--exclude", "*"];
     for (const pattern of INDEX_INCLUDES) args.push("--include", pattern);
@@ -172,6 +213,7 @@ export function createRemoteMirror(options) {
     // anything, and the id set is what marks a run as shared in the UI.
     remoteRunIds = await listRemoteRunIds();
     await aws(args);
+    await pruneDeleted();
     lastIndexedAt = Date.now();
   }
 
@@ -262,7 +304,15 @@ export function createRemoteMirror(options) {
     }
   }
 
-  /** Remove a run from the shared store (only ever called for your own runs). */
+  /**
+   * Remove a run from the shared store (only ever called for your own runs).
+   *
+   * Deliberately not conditional on `isRemote`: that set is only as fresh as
+   * the last successful index listing, and trusting it means a stale cache
+   * silently leaves the run in the store while telling you it was deleted.
+   * `s3 rm` on a prefix that holds nothing is a harmless no-op, so the safe
+   * move is to always ask.
+   */
   async function deleteRun(runId) {
     await aws([
       "s3",
@@ -273,6 +323,16 @@ export function createRemoteMirror(options) {
     ]);
     remoteRunIds.delete(runId);
     hydrations.delete(runId);
+  }
+
+  /**
+   * Retract a run from the store but keep the local copy — the counterpart to
+   * sharing one. Colleagues who already hydrated it keep what they downloaded
+   * (until their next refresh prunes it); retraction stops distribution, it
+   * doesn't unsee.
+   */
+  async function unshareRun(runId) {
+    await deleteRun(runId);
   }
 
   const isRemote = (runId) => remoteRunIds.has(runId);
@@ -325,7 +385,9 @@ export function createRemoteMirror(options) {
     isRemote,
     canDelete,
     canShare,
+    isOwn,
     pushRun,
+    unshareRun,
     status: () => ({
       enabled: true,
       url: REMOTE,

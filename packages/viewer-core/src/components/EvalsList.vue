@@ -137,6 +137,15 @@
               {{ sharingRunId === run.run_id ? "Sharing…" : "↑ Share" }}
             </button>
             <button
+              v-else-if="run.can_unshare"
+              class="share-run-btn"
+              :disabled="sharingRunId === run.run_id"
+              title="Remove this run from the shared store, keeping your copy"
+              @click.stop="unshareRun(run)"
+            >
+              {{ sharingRunId === run.run_id ? "Unsharing…" : "Unshare" }}
+            </button>
+            <button
               v-if="run.can_delete !== false"
               class="delete-run-btn"
               title="Delete this run"
@@ -468,6 +477,25 @@ async function shareRun(run) {
     }
     // Re-list rather than patching the row: sharing flips can_share/can_delete
     // and the shared badge, all of which the server decides.
+    await fetchRuns();
+  } catch (e) {
+    error.value = e.message;
+  } finally {
+    sharingRunId.value = null;
+  }
+}
+
+async function unshareRun(run) {
+  sharingRunId.value = run.run_id;
+  try {
+    const response = await fetch(
+      `/api/evals/${encodeURIComponent(run.run_id)}/share`,
+      { method: "DELETE" },
+    );
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error || "Failed to unshare run");
+    }
     await fetchRuns();
   } catch (e) {
     error.value = e.message;

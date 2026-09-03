@@ -119,6 +119,7 @@ A bare JSON array of strings, written by the viewer UI when users add tags. Kept
 | DELETE | `/api/evals/:runId/tags/:tag`                       | Remove a user tag                |
 | DELETE | `/api/evals/:runId`                                 | Delete a whole run from disk     |
 | POST   | `/api/evals/:runId/share`                           | Push a local run to the store    |
+| DELETE | `/api/evals/:runId/share`                           | Retract a run, keeping it locally |
 | GET    | `/api/remote`                                       | Shared-store status (see below)  |
 | POST   | `/api/remote/refresh`                               | Force a shared-store index sync  |
 
@@ -181,6 +182,18 @@ can be shared later from the UI — `POST /api/evals/:runId/share` mirrors it up
 That is refused for a run belonging to someone else: when a colleague deletes a
 run they shared, everyone who saw it keeps an index-only stub of it, and pushing
 that back would republish their run as a shell containing no outputs.
+
+`DELETE` on the same path unshares: the run leaves the store but its local copy
+stays, and it can be shared again. Colleagues who already downloaded it keep what
+they have until their next refresh.
+
+Deletions propagate on refresh, but by ownership rather than by mirroring: a
+local run is removed only if its `run.json` names somebody other than you *and*
+it is no longer in the store. `aws s3 sync --delete` would be the obvious
+mechanism and is the wrong one — the local results dir is a superset of the
+store, holding runs that were never shared, and `--delete` would strip exactly
+the `run.json` and `summary.json` the index filter matches while leaving their
+outputs behind as unlistable debris.
 
 A run's tags sidecar is pushed back up when it is edited. Deleting a shared run
 is refused unless `run.json`'s `user` matches the local user — otherwise the
