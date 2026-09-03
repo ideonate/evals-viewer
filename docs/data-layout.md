@@ -30,12 +30,19 @@ Run-level metadata. Tags here are "built-in" tags supplied by the writer; user-a
 ```json
 {
   "timestamp": "2026-04-07T10:30:00Z",
+  "user": "dan",
   "git_commit": "abc1234",
   "git_branch": "main",
   "git_dirty": false,
   "tags": ["baseline"]
 }
 ```
+
+`user` is who ran it, shown on the run in the viewer. Optional, but worth setting
+once runs from several machines are pooled in a shared store — see
+[Sharing runs](#sharing-runs). `evals_viewer_io.share.resolve_user()` derives it
+from `EVALS_USER`, then `USER`/`USERNAME`, ignoring generic container accounts
+(`root`, `node`, `vscode`, …).
 
 ### `summary.json` (per eval)
 
@@ -78,6 +85,8 @@ Everything else is rendered by the eval-specific inspector component (or the fal
 
 The case input as it was at execution time. Used so that historic runs remain reproducible/inspectable even if the input fixtures evolve. Surfaced to inspectors as `caseData.caseInput`.
 
+When this file exists it takes precedence over any `caseInput` a `caseDataLoader` supplies: the run's own record of its inputs beats a fixture read from today's working tree, which may have moved on — or, for a shared run, may not be the fixture that run used at all.
+
 ### `case-scores/{case_name}.json` (optional)
 
 Per-question (or per-subunit) scores, e.g.:
@@ -109,6 +118,8 @@ A bare JSON array of strings, written by the viewer UI when users add tags. Kept
 | POST   | `/api/evals/:runId/tags`                            | Add a user tag                   |
 | DELETE | `/api/evals/:runId/tags/:tag`                       | Remove a user tag                |
 | DELETE | `/api/evals/:runId`                                 | Delete a whole run from disk     |
+| GET    | `/api/remote`                                       | Shared-store status (see below)  |
+| POST   | `/api/remote/refresh`                               | Force a shared-store index sync  |
 
 The case-detail response merges data from multiple files into a single object:
 
@@ -125,6 +136,51 @@ The case-detail response merges data from multiple files into a single object:
   // plus any extras returned by the optional caseDataLoader hook
 }
 ```
+
+## Sharing runs
+
+A team can browse each other's runs by pointing the viewer at a shared object
+store (S3 today). There is no server and no database: **the shared store is a
+byte-for-byte mirror of this same directory tree**, and everything the viewer
+serves still comes off the local filesystem.
+
+```
+s3://bucket/runs/{run_id}/run.json
+s3://bucket/runs/{run_id}/{eval_name}/summary.json
+...
+```
+
+Runs are immutable once written, so a sync is always safe to repeat and
+`--delete` is never passed in either direction.
+
+**Writing** — `evals_viewer_io.share.push_run(run_dir)` mirrors one run up,
+honouring `EVALS_SHARE_URL` (destination) and `EVALS_SHARE_PROFILE` (AWS
+profile). The bundled `eval_run_dir` fixture calls it when the pytest session
+ends. Run ids should carry the user (`make_run_id(user="dan")` →
+`20260903_101500_dan`) so two people starting a run in the same second don't
+collide in one bucket.
+
+**Reading** — pass `remote` to `evalsViewerPlugin` and shared runs appear in the
+list alongside local ones, at two granularities, because a single run can carry
+tens of MB of rendered assets:
+
+| When                     | What is fetched                                | Cost       |
+| ------------------------ | ---------------------------------------------- | ---------- |
+| `GET /api/evals`         | every run's `run.json` + `summary.json`         | kilobytes  |
+| First open of a run      | that run's full tree, hydrated into `resultsDir`| once       |
+
+Because a run is hydrated onto disk before its summary or case detail is served,
+app-specific middlewares (assets, PDFs, traces) keep working unchanged. Apps that
+add such middlewares should build the mirror themselves with `createRemoteMirror`
+and `await mirror.hydrateRun(runId)` before serving, so deep links work too.
+
+A run's tags sidecar is pushed back up when it is edited. Deleting a shared run
+is refused unless `run.json`'s `user` matches the local user — otherwise the
+delete would be undone by the next refresh, or would bin a colleague's work.
+
+`GET /api/remote` reports `{ enabled, url, user, profile, run_count,
+last_indexed_at, error }`; a store that is unreachable (expired SSO session, no
+AWS CLI) degrades to local-only with the reason in `error`.
 
 ## Extending: `caseDataLoader`
 

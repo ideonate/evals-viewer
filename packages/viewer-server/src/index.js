@@ -9,6 +9,7 @@ export {
   resolveResultsDir,
   staticCaseInputLoader,
 } from "./loaders.js";
+export { createRemoteMirror, resolveUser } from "./remote.js";
 
 /**
  * Vite plugin wrapping the evals API middleware.
@@ -26,6 +27,11 @@ export {
  *         // reference (videos, snapshots). Registered BEFORE the API middleware,
  *         // which otherwise claims every /api/* URL.
  *         serveFiles: [{ prefix: "/api/media/", dir: "./test-results/evals" }],
+ *         // optional: browse runs colleagues pushed to a shared object store
+ *         // alongside your own. A URL is enough; pass a mirror built with
+ *         // createRemoteMirror() instead when your own middlewares need to
+ *         // hydrate runs too.
+ *         remote: process.env.EVALS_SHARE_URL,
  *       }),
  *     ],
  *   });

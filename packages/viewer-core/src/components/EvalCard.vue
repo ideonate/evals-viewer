@@ -32,6 +32,10 @@
         <span v-if="showTimestampOnly && gitBranch" class="git-branch-badge">
           {{ gitBranch }}
         </span>
+        <span v-if="showTimestampOnly && user" class="user-badge">
+          <span v-if="shared" class="shared-icon" title="Shared run">☁</span>
+          {{ user }}
+        </span>
         <span v-for="tag in tags" :key="tag" class="tag-badge">{{ tag }}</span>
       </p>
       <div v-if="item.aggregates" class="aggregates">
@@ -58,6 +62,8 @@ const props = defineProps({
   gitCommit: { type: String, default: null },
   gitBranch: { type: String, default: null },
   gitDirty: { type: Boolean, default: false },
+  user: { type: String, default: null },
+  shared: { type: Boolean, default: false },
   tags: { type: Array, default: () => [] },
   compareMode: { type: Boolean, default: false },
   isSelected: { type: Boolean, default: false },
@@ -188,6 +194,21 @@ function getScoreClass(score) {
   font-family: monospace;
   color: #888;
   margin-left: 0.25rem;
+}
+
+.user-badge {
+  font-size: 0.7rem;
+  background: #e0edff;
+  color: #1e40af;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  font-weight: 600;
+  margin-left: 0.35rem;
+}
+
+.user-badge .shared-icon {
+  opacity: 0.7;
+  margin-right: 0.1rem;
 }
 
 .tag-badge {

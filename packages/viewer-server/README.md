@@ -46,6 +46,46 @@ Plus optional `inputs/`, `case-scores/`, and a sidecar `tags.json`. See [`docs/d
 
 The Python [`evals-viewer-io`](https://github.com/ideonate/evals-viewer/tree/main/packages/pydantic-evals-io) package writes this layout from your test suite.
 
+## Sharing runs with your team
+
+Point the viewer at a shared object store and your colleagues' runs appear in the
+list next to your own, each badged with who ran it:
+
+```js
+evalsViewerPlugin({
+  resultsDir: RESULTS_DIR,
+  remote: process.env.EVALS_SHARE_URL, // "s3://your-bucket/runs"
+});
+```
+
+There is no server and no database — the store is a byte-for-byte mirror of the
+same directory tree, synced with the AWS CLI (which means the developer's
+existing SSO session and profile just work). Every run's `run.json` +
+`summary.json` are pulled on the list page; a run's full tree is hydrated onto
+disk the first time it is opened, so nothing else in the viewer needs to know S3
+exists.
+
+If your app adds its own middlewares (assets, PDFs, traces), build the mirror
+yourself and hydrate before serving so deep links work too:
+
+```js
+import { createRemoteMirror, evalsViewerPlugin } from "@ideonate/evals-viewer-server";
+
+const mirror = process.env.EVALS_SHARE_URL
+  ? createRemoteMirror({ url: process.env.EVALS_SHARE_URL, resultsDir: RESULTS_DIR })
+  : null;
+
+// inside your middleware, before touching the filesystem:
+if (mirror) await mirror.hydrateRun(runId);
+
+evalsViewerPlugin({ resultsDir: RESULTS_DIR, remote: mirror });
+```
+
+Runs are pushed up by the writer side — see
+[`evals-viewer-io`](https://pypi.org/project/evals-viewer-io/)'s `push_run()`.
+`EVALS_SHARE_PROFILE` picks the AWS profile; `GET /api/remote` reports status and
+why the store is unreachable if it is.
+
 ## Loader helpers
 
 Need to attach extra fields to the case-detail response (e.g. assessments, transcripts, persona files)? Compose a `caseDataLoader` from the included building blocks:

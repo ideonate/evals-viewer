@@ -81,6 +81,10 @@ export default defineConfig({
       // fixtures or per-case auxiliary files (assessments, transcripts).
       // See https://github.com/ideonate/evals-viewer for composeLoaders
       // and datasetCaseLoader helpers.
+      //
+      // remote: browse runs teammates pushed to a shared object store
+      // alongside your own — add `remote: process.env.EVALS_SHARE_URL`
+      // once a bucket exists, and have the writer call push_run().
     }),
   ],
   // REQUIRED — both blocks. @ideonate/evals-viewer-core ships raw .vue

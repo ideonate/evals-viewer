@@ -19,7 +19,8 @@ Requires Python 3.10+ and Pydantic 2.
 | `save_run_metadata`, `save_eval_results` | Filesystem writers — given models and dicts, write JSON in the layout the viewer expects |
 | `compute_aggregates(cases)` | Group `case.scores[evaluator]` across cases → `{evaluator: {mean, min, max}}` |
 | `compute_token_totals(cases)` | Sum token usage / cost / per-model breakdown across cases |
-| `eval_run_dir` (pytest fixture) | Optional fixture creating a fresh run directory under `EVALS_RESULTS_DIR` |
+| `eval_run_dir` (pytest fixture) | Optional fixture creating a fresh run directory under `EVALS_RESULTS_DIR`, then sharing it |
+| `resolve_user`, `make_run_id`, `push_run` | Stamp runs with who ran them and mirror them to a shared store |
 
 ## Quickstart: minimal end-to-end
 
@@ -159,6 +160,38 @@ def test_my_eval(eval_run_dir):
 ```
 
 Set `EVALS_RESULTS_DIR=tests/test-results/evals` (or wherever your project keeps them) so the run lands somewhere the viewer can find.
+
+## Sharing runs with your team
+
+A run directory is self-contained, so sharing one is just a mirror to an object
+store (S3 today, via the AWS CLI — which inherits the developer's existing SSO
+session and profile):
+
+```python
+from evals_viewer_io import make_run_id, push_run, resolve_user
+
+user = resolve_user()                    # EVALS_USER, else USER/USERNAME
+run_id = make_run_id(user=user)          # 20260903_101500_dan
+...                                      # write the run as usual
+push_run(run_dir)                        # honours EVALS_SHARE_URL
+```
+
+| Env var | Purpose |
+| --- | --- |
+| `EVALS_SHARE_URL` | Destination, e.g. `s3://your-bucket/runs`. Unset = sharing off, and `push_run` is a no-op returning None. |
+| `EVALS_SHARE_PROFILE` | AWS profile to push with (default: the ambient credential chain). |
+| `EVALS_USER` | Name stamped onto runs, if the shell's `USER` isn't the one you want. |
+
+Put the user in the run id: a bare timestamp collides when two people start a run
+in the same second, which starts to matter once several machines write into one
+bucket. Push never passes `--delete` — the shared store holds other people's runs
+too. To share a run after the fact:
+
+```sh
+python -m evals_viewer_io.share push tests/test-results/evals/20260903_101500_dan
+```
+
+The reading side is [`@ideonate/evals-viewer-server`](https://www.npmjs.com/package/@ideonate/evals-viewer-server)'s `remote` option, which pulls each run's index files for the list page and hydrates a full run on first open.
 
 ## What this package deliberately does *not* do
 

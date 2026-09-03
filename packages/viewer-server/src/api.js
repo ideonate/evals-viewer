@@ -14,11 +14,18 @@
  *                                                      case input data — apps
  *                                                      provide caseDataLoader
  *                                                      to extract domain extras)
+ *
+ * With a `remote` mirror configured, runs a colleague pushed to a shared object
+ * store appear in the same list: their index files are pulled on /api/evals and
+ * the full run is hydrated into {resultsDir} the first time it is opened. See
+ * remote.js.
  */
 
 import { readFile, readdir, rm, writeFile } from "fs/promises";
 import { existsSync, statSync } from "fs";
 import { join, resolve, normalize } from "path";
+
+import { createRemoteMirror } from "./remote.js";
 
 async function readJson(path) {
   const content = await readFile(path, "utf-8");
@@ -45,6 +52,18 @@ function readRequestBody(req) {
 }
 
 /**
+ * Accept a remote mirror in any of the shapes the plugin advertises: nothing,
+ * a bare URL, options for `createRemoteMirror`, or a mirror already built by
+ * the app (so its own middlewares can share the same hydration state).
+ */
+function resolveMirror(remote, resultsDir) {
+  if (!remote) return null;
+  if (typeof remote.hydrateRun === "function") return remote;
+  const config = typeof remote === "string" ? { url: remote } : remote;
+  return createRemoteMirror({ resultsDir, ...config });
+}
+
+/**
  * Create the evals viewer middleware.
  *
  * @param {object} options
@@ -56,17 +75,25 @@ function readRequestBody(req) {
  *           Optional async hook returning extra fields to merge into the case
  *           detail response (e.g. assessment, transcript). Lets apps inject
  *           domain-specific input loading without forking the server.
+ * @param {object|string} [options.remote]
+ *           Shared object store to browse alongside local runs. Either a URL
+ *           ("s3://bucket/runs"), a `createRemoteMirror` options object, or an
+ *           already-built mirror — pass a built one when the app's own
+ *           middlewares need to hydrate runs too.
  */
 export function createEvalsApiMiddleware(options) {
   const {
     resultsDir,
     evalsDir = null,
     caseDataLoader = null,
+    remote = null,
   } = options || {};
 
   if (!resultsDir) {
     throw new Error("createEvalsApiMiddleware: resultsDir is required");
   }
+
+  const mirror = resolveMirror(remote, resultsDir);
 
   const RESULTS_DIR = resolve(resultsDir);
   const EVALS_DIR = evalsDir ? resolve(evalsDir) : null;
@@ -128,6 +155,9 @@ export function createEvalsApiMiddleware(options) {
 
   async function handleListEvals(req, res) {
     try {
+      // Pulls every shared run's run.json + summary.json (kilobytes). Degrades
+      // to local-only if the store is unreachable; /api/remote says why.
+      if (mirror) await mirror.refreshIndex();
       const runIds = await listRuns();
       const runs = [];
       for (const runId of runIds) {
@@ -162,14 +192,18 @@ export function createEvalsApiMiddleware(options) {
         }
         const userTags = await loadUserTags(join(RESULTS_DIR, runId));
         const allTags = [...(runMeta.tags || []), ...userTags];
+        const isShared = mirror ? mirror.isRemote(runId) : false;
         runs.push({
           run_id: runId,
           timestamp: runMeta.timestamp || null,
+          user: runMeta.user || null,
           git_commit: runMeta.git_commit || null,
           git_branch: runMeta.git_branch || null,
           git_dirty: runMeta.git_dirty || false,
           tags: allTags,
           user_tags: userTags,
+          shared: isShared,
+          can_delete: mirror ? await mirror.canDelete(runId) : true,
           evals,
         });
       }
@@ -187,6 +221,9 @@ export function createEvalsApiMiddleware(options) {
   }
 
   async function handleGetEvalSummary(req, res, runId, evalName) {
+    // Opening a run is the moment its full tree (outputs, assets, PDFs) is
+    // worth fetching; everything downstream then reads plain local files.
+    if (mirror) await mirror.hydrateRun(runId);
     const summaryPath = join(RESULTS_DIR, runId, evalName, "summary.json");
     if (!existsSync(summaryPath)) {
       return errorResponse(res, `Eval '${runId}/${evalName}' not found`, 404);
@@ -199,6 +236,7 @@ export function createEvalsApiMiddleware(options) {
   }
 
   async function handleGetCaseDetail(req, res, runId, evalName, caseName) {
+    if (mirror) await mirror.hydrateRun(runId);
     const evalDir = join(RESULTS_DIR, runId, evalName);
     const outputPath = join(evalDir, "outputs", `${caseName}.json`);
     if (!existsSync(outputPath)) {
@@ -217,7 +255,8 @@ export function createEvalsApiMiddleware(options) {
       if (existsSync(runJsonPath)) {
         try {
           const runMeta = await readJson(runJsonPath);
-          if (runMeta.logfire_project_url) logfireProjectUrl = runMeta.logfire_project_url;
+          if (runMeta.logfire_project_url)
+            logfireProjectUrl = runMeta.logfire_project_url;
         } catch {
           /* ignore */
         }
@@ -272,7 +311,7 @@ export function createEvalsApiMiddleware(options) {
         }
       }
 
-      jsonResponse(res, {
+      const payload = {
         eval_type: evalName,
         case_name: caseName,
         output,
@@ -283,10 +322,23 @@ export function createEvalsApiMiddleware(options) {
         judgeReasons,
         logfireProjectUrl,
         ...extras,
-      });
+      };
+      // Run-level inputs record what this run actually ran on, so a static
+      // fixture loader must not overwrite them with today's copy — that's the
+      // whole point of saving inputs/, and it matters most when the run came
+      // from a colleague whose fixtures you may not even have.
+      if (caseInput) payload.caseInput = caseInput;
+
+      jsonResponse(res, payload);
     } catch (err) {
       errorResponse(res, `Error reading case: ${err.message}`);
     }
+  }
+
+  /** Keep a shared run's tags visible to everyone else, best-effort. */
+  async function pushTags(runId) {
+    if (mirror && mirror.isRemote(runId))
+      await mirror.pushFile(runId, "tags.json");
   }
 
   async function handleAddTag(req, res, runId) {
@@ -311,6 +363,7 @@ export function createEvalsApiMiddleware(options) {
           join(runDir, "tags.json"),
           JSON.stringify(tags, null, 2),
         );
+        await pushTags(runId);
       }
       jsonResponse(res, { tags });
     } catch (err) {
@@ -328,6 +381,7 @@ export function createEvalsApiMiddleware(options) {
       let tags = await loadUserTags(runDir);
       tags = tags.filter((t) => t !== tag);
       await writeFile(join(runDir, "tags.json"), JSON.stringify(tags, null, 2));
+      await pushTags(runId);
       jsonResponse(res, { tags });
     } catch (err) {
       errorResponse(res, `Error removing tag: ${err.message}`);
@@ -340,12 +394,33 @@ export function createEvalsApiMiddleware(options) {
     if (!existsSync(runDir) || !statSync(runDir).isDirectory()) {
       return errorResponse(res, `Run '${runId}' not found`, 404);
     }
+    // A shared run is deleted for everyone, so only its owner may do it —
+    // otherwise deleting locally would just pull it back on the next refresh.
+    if (mirror && mirror.isRemote(runId) && !(await mirror.canDelete(runId))) {
+      return errorResponse(
+        res,
+        `Run '${runId}' was shared by someone else — ask them to delete it, ` +
+          `or remove it with: aws s3 rm ${mirror.url}/${runId}/ --recursive`,
+        403,
+      );
+    }
     try {
+      if (mirror && mirror.isRemote(runId)) await mirror.deleteRun(runId);
       await rm(runDir, { recursive: true, force: true });
       jsonResponse(res, { deleted: runId });
     } catch (err) {
       errorResponse(res, `Error deleting run: ${err.message}`);
     }
+  }
+
+  async function handleRemoteStatus(req, res) {
+    jsonResponse(res, mirror ? mirror.status() : { enabled: false });
+  }
+
+  async function handleRemoteRefresh(req, res) {
+    if (!mirror) return jsonResponse(res, { enabled: false });
+    const result = await mirror.refreshIndex({ force: true });
+    jsonResponse(res, { ...mirror.status(), ...result });
   }
 
   return function evalsApiMiddleware(req, res, next) {
@@ -355,6 +430,14 @@ export function createEvalsApiMiddleware(options) {
 
     if (path === "/api/evals" && req.method === "GET") {
       return handleListEvals(req, res);
+    }
+
+    if (path === "/api/remote" && req.method === "GET") {
+      return handleRemoteStatus(req, res);
+    }
+
+    if (path === "/api/remote/refresh" && req.method === "POST") {
+      return handleRemoteRefresh(req, res);
     }
 
     const addTagMatch = path.match(/^\/api\/evals\/([^/]+)\/tags$/);
@@ -377,7 +460,9 @@ export function createEvalsApiMiddleware(options) {
       return handleDeleteRun(req, res, decodeURIComponent(deleteMatch[1]));
     }
 
-    const summaryMatch = path.match(/^\/api\/evals\/([^/]+)\/([^/]+)\/summary$/);
+    const summaryMatch = path.match(
+      /^\/api\/evals\/([^/]+)\/([^/]+)\/summary$/,
+    );
     if (summaryMatch) {
       return handleGetEvalSummary(
         req,

@@ -21,6 +21,15 @@
         </div>
         <div class="compare-controls">
           <button
+            v-if="remote.enabled"
+            class="refresh-btn"
+            :disabled="refreshing"
+            :title="`Shared store: ${remote.url}`"
+            @click="refreshShared"
+          >
+            {{ refreshing ? "Syncing…" : "↻ Shared" }}
+          </button>
+          <button
             class="toggle-compare-btn"
             :class="{ active: compareMode }"
             @click="toggleCompareMode"
@@ -36,6 +45,11 @@
           </button>
         </div>
       </div>
+    </div>
+
+    <div v-if="remote.error" class="remote-warning">
+      Shared runs unavailable — showing local runs only.
+      <span class="remote-detail">{{ remote.error }}</span>
     </div>
 
     <div v-if="compareMode" class="compare-hint">
@@ -63,6 +77,12 @@
               <span v-if="run.git_branch" class="git-branch">{{
                 run.git_branch
               }}</span>
+            </span>
+            <span v-if="run.user" class="user-badge">
+              <span v-if="run.shared" class="shared-icon" title="Shared run"
+                >☁</span
+              >
+              {{ run.user }}
             </span>
             <span
               v-for="tag in run.tags"
@@ -100,6 +120,7 @@
               +
             </button>
             <button
+              v-if="run.can_delete !== false"
               class="delete-run-btn"
               title="Delete this run"
               @click.stop="confirmDelete(run)"
@@ -143,6 +164,8 @@
               :git-commit="entry.gitCommit"
               :git-branch="entry.gitBranch"
               :git-dirty="entry.gitDirty"
+              :user="entry.user"
+              :shared="entry.shared"
               :tags="entry.tags"
               show-timestamp-only
               :compare-mode="compareMode"
@@ -216,6 +239,10 @@ const selectedForCompare = ref([]);
 const groupBy = ref(rememberedGroupBy);
 watch(groupBy, (v) => (rememberedGroupBy = v));
 const runToDelete = ref(null);
+// Shared object store, when the server has one configured. `enabled: false`
+// keeps every v-if in the template quiet for a purely local setup.
+const remote = ref({ enabled: false });
+const refreshing = ref(false);
 
 async function fetchRuns() {
   try {
@@ -226,6 +253,28 @@ async function fetchRuns() {
     error.value = e.message;
   } finally {
     loading.value = false;
+  }
+}
+
+async function fetchRemoteStatus() {
+  try {
+    const response = await fetch("/api/remote");
+    if (response.ok) remote.value = await response.json();
+  } catch {
+    // A server without the remote routes is just a local-only viewer.
+  }
+}
+
+async function refreshShared() {
+  refreshing.value = true;
+  try {
+    const response = await fetch("/api/remote/refresh", { method: "POST" });
+    if (response.ok) remote.value = await response.json();
+    await fetchRuns();
+  } catch (e) {
+    error.value = e.message;
+  } finally {
+    refreshing.value = false;
   }
 }
 
@@ -242,6 +291,8 @@ const groupedByEval = computed(() => {
         gitCommit: run.git_commit,
         gitBranch: run.git_branch,
         gitDirty: run.git_dirty,
+        user: run.user,
+        shared: run.shared,
         tags: run.tags,
         eval: ev,
       });
@@ -405,14 +456,22 @@ async function deleteRun() {
         method: "DELETE",
       },
     );
-    if (!response.ok) throw new Error("Failed to delete run");
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error || "Failed to delete run");
+    }
     runs.value = runs.value.filter((r) => r.run_id !== run.run_id);
   } catch (e) {
     error.value = e.message;
   }
 }
 
-onMounted(fetchRuns);
+onMounted(async () => {
+  // Listing the runs is what refreshes the shared-store index, so ask for its
+  // status afterwards — otherwise the first paint always reports zero runs.
+  await fetchRuns();
+  await fetchRemoteStatus();
+});
 </script>
 
 <style scoped>
@@ -502,6 +561,60 @@ onMounted(fetchRuns);
 
 .compare-btn:hover {
   background: #219a52;
+}
+
+.refresh-btn {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #ccc;
+  background: white;
+  color: #555;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  background: #f5f5f5;
+}
+
+.refresh-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.remote-warning {
+  background: #fff8e1;
+  border: 1px solid #ffe082;
+  color: #7a5c00;
+  padding: 0.6rem 1rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+}
+
+.remote-detail {
+  display: block;
+  margin-top: 0.2rem;
+  font-family: monospace;
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+
+.user-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.75rem;
+  background: #e0edff;
+  color: #1e40af;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.user-badge .shared-icon {
+  opacity: 0.7;
 }
 
 .compare-hint {

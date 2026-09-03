@@ -135,6 +135,10 @@ class RunMetadata(_Permissive):
     """Contents of ``run.json`` at the run-id directory root."""
 
     timestamp: str
+    #: Who ran it. Shown on the run in the viewer, which matters once runs from
+    #: several machines are pooled in one shared store. See
+    #: ``evals_viewer_io.share.resolve_user``.
+    user: str | None = None
     git_commit: str | None = None
     git_branch: str | None = None
     git_dirty: bool = False
