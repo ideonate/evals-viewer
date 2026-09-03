@@ -1,6 +1,6 @@
 {
   "name": "@ideonate/evals-viewer-core",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "type": "module",
   "description": "Reusable Vue 3 components, composables, router factory, and inspector registry for the evals-viewer framework — a lightweight, configurable viewer for LLM evaluation results.",
   "keywords": [
