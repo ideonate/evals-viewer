@@ -1,6 +1,6 @@
 {
   "name": "@ideonate/evals-viewer-server",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "type": "module",
   "description": "Vite plugin and middleware exposing the filesystem-backed evals-viewer API, plus reusable building blocks (composeLoaders, datasetCaseLoader, …) for assembling a custom caseDataLoader.",
   "keywords": [
