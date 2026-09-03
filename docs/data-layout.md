@@ -156,10 +156,11 @@ Runs are immutable once written, so a sync is always safe to repeat and
 
 **Writing** — `evals_viewer_io.share.push_run(run_dir)` mirrors one run up,
 honouring `EVALS_SHARE_URL` (destination) and `EVALS_SHARE_PROFILE` (AWS
-profile). The bundled `eval_run_dir` fixture calls it when the pytest session
-ends. Run ids should carry the user (`make_run_id(user="dan")` →
-`20260903_101500_dan`) so two people starting a run in the same second don't
-collide in one bucket.
+profile). Sharing is opt-in per run: the bundled `eval_run_dir` fixture pushes
+only when `EVALS_SHARE_ALWAYS` is set, because most runs are working-out and a
+shared store fills with those faster than anyone tidies them. Run ids should
+carry the user (`make_run_id(user="dan")` → `20260903_101500_dan`) so two people
+starting a run in the same second don't collide in one bucket.
 
 **Reading** — pass `remote` to `evalsViewerPlugin` and shared runs appear in the
 list alongside local ones, at two granularities, because a single run can carry
