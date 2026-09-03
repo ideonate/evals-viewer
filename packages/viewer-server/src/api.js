@@ -25,7 +25,7 @@ import { readFile, readdir, rm, writeFile } from "fs/promises";
 import { existsSync, statSync } from "fs";
 import { join, resolve, normalize } from "path";
 
-import { createRemoteMirror } from "./remote.js";
+import { createRemoteMirror, resolveUser } from "./remote.js";
 
 async function readJson(path) {
   const content = await readFile(path, "utf-8");
@@ -414,7 +414,12 @@ export function createEvalsApiMiddleware(options) {
   }
 
   async function handleRemoteStatus(req, res) {
-    jsonResponse(res, mirror ? mirror.status() : { enabled: false });
+    // Report the identity even with no shared store: the viewer shows who it
+    // is running as, which is worth knowing whether or not sharing is on.
+    jsonResponse(
+      res,
+      mirror ? mirror.status() : { enabled: false, user: resolveUser() },
+    );
   }
 
   async function handleRemoteRefresh(req, res) {

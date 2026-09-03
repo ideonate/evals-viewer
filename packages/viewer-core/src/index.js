@@ -14,6 +14,7 @@ export {
   CASE_INSPECTOR_DATA,
   useCaseInspector,
 } from "./composables/useCaseInspector.js";
+export { useRemoteStatus } from "./composables/useRemoteStatus.js";
 export * from "./utils/evalHelpers.js";
 
 export { default as AppShell } from "./AppShell.vue";

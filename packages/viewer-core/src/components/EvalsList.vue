@@ -235,6 +235,7 @@ let rememberedGroupBy = "timestamp";
 import { ref, computed, onMounted, nextTick, watch } from "vue";
 import { useRouter } from "vue-router";
 import EvalCard from "./EvalCard.vue";
+import { useRemoteStatus } from "../composables/useRemoteStatus.js";
 
 const router = useRouter();
 
@@ -248,8 +249,13 @@ const groupBy = ref(rememberedGroupBy);
 watch(groupBy, (v) => (rememberedGroupBy = v));
 const runToDelete = ref(null);
 // Shared object store, when the server has one configured. `enabled: false`
-// keeps every v-if in the template quiet for a purely local setup.
-const remote = ref({ enabled: false });
+// keeps every v-if in the template quiet for a purely local setup. Shared with
+// the app header, which shows the same identity.
+const {
+  status: remote,
+  refresh: refreshRemoteStatus,
+  syncNow,
+} = useRemoteStatus();
 const refreshing = ref(false);
 
 async function fetchRuns() {
@@ -264,20 +270,10 @@ async function fetchRuns() {
   }
 }
 
-async function fetchRemoteStatus() {
-  try {
-    const response = await fetch("/api/remote");
-    if (response.ok) remote.value = await response.json();
-  } catch {
-    // A server without the remote routes is just a local-only viewer.
-  }
-}
-
 async function refreshShared() {
   refreshing.value = true;
   try {
-    const response = await fetch("/api/remote/refresh", { method: "POST" });
-    if (response.ok) remote.value = await response.json();
+    await syncNow();
     await fetchRuns();
   } catch (e) {
     error.value = e.message;
@@ -475,10 +471,10 @@ async function deleteRun() {
 }
 
 onMounted(async () => {
-  // Listing the runs is what refreshes the shared-store index, so ask for its
-  // status afterwards — otherwise the first paint always reports zero runs.
+  // Listing the runs is what refreshes the shared-store index, so re-read the
+  // status afterwards — otherwise it always reports zero runs on first paint.
   await fetchRuns();
-  await fetchRemoteStatus();
+  await refreshRemoteStatus({ force: true });
 });
 </script>
 
