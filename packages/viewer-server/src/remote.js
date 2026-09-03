@@ -122,7 +122,7 @@ export function createRemoteMirror(options) {
   let lastError = null;
   const hydrations = new Map();
 
-  async function aws(args) {
+  async function aws(args, { emptyIsOk = false } = {}) {
     const argv = profile ? [...args, "--profile", profile] : args;
     try {
       const { stdout } = await execFileAsync(awsBin, argv, {
@@ -130,6 +130,17 @@ export function createRemoteMirror(options) {
       });
       return stdout;
     } catch (err) {
+      // `aws s3 ls` exits 1 with no output at all when a prefix holds no
+      // objects — which is exactly the state a shared store is in before
+      // anyone has pushed a run. That's an empty listing, not a failure.
+      if (
+        emptyIsOk &&
+        err.code === 1 &&
+        !err.stdout &&
+        !(err.stderr || "").trim()
+      ) {
+        return "";
+      }
       // The CLI puts the useful part (expired SSO session, no such bucket,
       // access denied) on stderr; err.message alone is just the exit code.
       const detail = (err.stderr || err.message || "").trim().split("\n").pop();
@@ -143,7 +154,7 @@ export function createRemoteMirror(options) {
 
   /** Run ids present in the shared store, from a delimiter listing. */
   async function listRemoteRunIds() {
-    const stdout = await aws(["s3", "ls", `${REMOTE}/`]);
+    const stdout = await aws(["s3", "ls", `${REMOTE}/`], { emptyIsOk: true });
     const ids = new Set();
     for (const line of stdout.split("\n")) {
       const m = line.match(/^\s*PRE\s+(.+?)\/\s*$/);
