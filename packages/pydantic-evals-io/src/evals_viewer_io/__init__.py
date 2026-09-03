@@ -14,6 +14,7 @@ from .share import (
     push_run,
     resolve_remote_url,
     resolve_user,
+    share_by_default,
 )
 from .writer import save_eval_results, save_run_metadata
 
@@ -32,4 +33,5 @@ __all__ = [
     "resolve_user",
     "save_eval_results",
     "save_run_metadata",
+    "share_by_default",
 ]

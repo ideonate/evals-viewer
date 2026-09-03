@@ -34,6 +34,7 @@ __all__ = [
     "push_run",
     "resolve_remote_url",
     "resolve_user",
+    "share_by_default",
 ]
 
 #: Env var holding the destination, e.g. ``s3://workstuff-evals-share/runs``.
@@ -43,6 +44,10 @@ REMOTE_URL_ENV = "EVALS_SHARE_URL"
 PROFILE_ENV = "EVALS_SHARE_PROFILE"
 #: Env var overriding the name stamped onto runs.
 USER_ENV = "EVALS_USER"
+#: Env var opting every run into being shared, for unattended jobs.
+ALWAYS_ENV = "EVALS_SHARE_ALWAYS"
+
+_TRUTHY = frozenset({"1", "true", "yes", "on"})
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 
@@ -124,6 +129,19 @@ def resolve_remote_url(explicit: str | None = None) -> str | None:
     """Destination for shared runs — the ``explicit`` argument or EVALS_SHARE_URL."""
     url = explicit or os.getenv(REMOTE_URL_ENV)
     return url.rstrip("/") if url else None
+
+
+def share_by_default() -> bool:
+    """Whether a finished run should be pushed without being asked.
+
+    Off unless ``EVALS_SHARE_ALWAYS`` says otherwise. Most runs are working-out
+    — a half-tuned prompt, an aborted attempt, three near-identical tries — and
+    a shared store fills with those faster than anyone tidies them. Publishing
+    is a decision worth making per run, once you've seen the results; the
+    viewer's Share button and ``push_run`` are how it gets made. Unattended
+    jobs that genuinely should publish everything set the env var.
+    """
+    return os.getenv(ALWAYS_ENV, "").strip().lower() in _TRUTHY
 
 
 def _aws_bin() -> str:

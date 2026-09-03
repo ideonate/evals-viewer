@@ -18,7 +18,13 @@ from pathlib import Path
 import pytest
 
 from .schema import RunMetadata
-from .share import ShareError, make_run_id, push_run, resolve_user
+from .share import (
+    ShareError,
+    make_run_id,
+    push_run,
+    resolve_user,
+    share_by_default,
+)
 from .writer import save_run_metadata
 
 
@@ -27,8 +33,11 @@ def eval_run_dir(tmp_path_factory) -> Path:
     """Create a fresh run directory for the test session and return its path.
 
     Honours ``EVALS_RESULTS_DIR`` if set, otherwise uses a tmp dir. Writes a
-    minimal ``run.json`` so the viewer will list it, then shares the finished
-    run if ``EVALS_SHARE_URL`` is set.
+    minimal ``run.json`` so the viewer will list it.
+
+    The finished run stays local unless ``EVALS_SHARE_ALWAYS`` is set — sharing
+    is a per-run decision, made once you've seen the results, via the viewer's
+    Share button or ``push_run``.
     """
     base = Path(os.environ.get("EVALS_RESULTS_DIR", tmp_path_factory.mktemp("evals")))
     user = resolve_user()
@@ -42,6 +51,8 @@ def eval_run_dir(tmp_path_factory) -> Path:
 
     yield run_dir
 
+    if not share_by_default():
+        return
     # Sharing is best-effort: a run that is already on disk shouldn't be
     # reported as a test failure because the network or a token was missing.
     try:
