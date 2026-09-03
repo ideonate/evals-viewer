@@ -2,8 +2,8 @@
   <div class="evals-list">
     <div class="header-row">
       <h1>Eval Runs</h1>
-      <div v-if="!loading && runs.length > 0" class="header-controls">
-        <div class="group-controls">
+      <div v-if="!loading" class="header-controls">
+        <div v-if="runs.length > 0" class="group-controls">
           <button
             class="group-btn"
             :class="{ active: groupBy === 'timestamp' }"
@@ -29,20 +29,22 @@
           >
             {{ refreshing ? "Syncing…" : "↻ Shared" }}
           </button>
-          <button
-            class="toggle-compare-btn"
-            :class="{ active: compareMode }"
-            @click="toggleCompareMode"
-          >
-            {{ compareMode ? "Cancel" : "Compare Runs" }}
-          </button>
-          <button
-            v-if="compareMode && selectedForCompare.length >= 2"
-            class="compare-btn"
-            @click="goToCompare"
-          >
-            Compare ({{ selectedForCompare.length }})
-          </button>
+          <template v-if="runs.length > 0">
+            <button
+              class="toggle-compare-btn"
+              :class="{ active: compareMode }"
+              @click="toggleCompareMode"
+            >
+              {{ compareMode ? "Cancel" : "Compare Runs" }}
+            </button>
+            <button
+              v-if="compareMode && selectedForCompare.length >= 2"
+              class="compare-btn"
+              @click="goToCompare"
+            >
+              Compare ({{ selectedForCompare.length }})
+            </button>
+          </template>
         </div>
       </div>
     </div>
@@ -59,7 +61,13 @@
 
     <div v-if="loading" class="loading">Loading...</div>
     <div v-else-if="error" class="error">{{ error }}</div>
-    <div v-else-if="runs.length === 0" class="empty">No eval runs found</div>
+    <div v-else-if="runs.length === 0" class="empty">
+      No eval runs found
+      <span v-if="remote.enabled" class="empty-hint">
+        Nothing local, and nothing in {{ remote.url }} — run some evals, or hit
+        ↻ Shared to check the store again.
+      </span>
+    </div>
 
     <template v-else>
       <!-- By Time: each run is a group -->
@@ -633,6 +641,13 @@ onMounted(async () => {
   padding: 2rem;
   text-align: center;
   color: #666;
+}
+
+.empty-hint {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: #999;
 }
 
 .error {
