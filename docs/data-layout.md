@@ -118,6 +118,7 @@ A bare JSON array of strings, written by the viewer UI when users add tags. Kept
 | POST   | `/api/evals/:runId/tags`                            | Add a user tag                   |
 | DELETE | `/api/evals/:runId/tags/:tag`                       | Remove a user tag                |
 | DELETE | `/api/evals/:runId`                                 | Delete a whole run from disk     |
+| POST   | `/api/evals/:runId/share`                           | Push a local run to the store    |
 | GET    | `/api/remote`                                       | Shared-store status (see below)  |
 | POST   | `/api/remote/refresh`                               | Force a shared-store index sync  |
 
@@ -173,6 +174,12 @@ Because a run is hydrated onto disk before its summary or case detail is served,
 app-specific middlewares (assets, PDFs, traces) keep working unchanged. Apps that
 add such middlewares should build the mirror themselves with `createRemoteMirror`
 and `await mirror.hydrateRun(runId)` before serving, so deep links work too.
+
+Runs are usually pushed by the writer as they finish, but one that was kept local
+can be shared later from the UI — `POST /api/evals/:runId/share` mirrors it up.
+That is refused for a run belonging to someone else: when a colleague deletes a
+run they shared, everyone who saw it keeps an index-only stub of it, and pushing
+that back would republish their run as a shell containing no outputs.
 
 A run's tags sidecar is pushed back up when it is edited. Deleting a shared run
 is refused unless `run.json`'s `user` matches the local user — otherwise the
