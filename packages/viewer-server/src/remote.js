@@ -229,6 +229,21 @@ export function createRemoteMirror(options) {
     return promise;
   }
 
+  /**
+   * Push a whole local run up to the shared store — the "share this one after
+   * the fact" path, for a run that was kept local at the time it ran.
+   */
+  async function pushRun(runId) {
+    await aws([
+      "s3",
+      "sync",
+      join(LOCAL, runId),
+      `${REMOTE}/${runId}/`,
+      "--only-show-errors",
+    ]);
+    remoteRunIds.add(runId);
+  }
+
   /** Push one file back up — used for the tags sidecar the viewer writes. */
   async function pushFile(runId, relPath) {
     const local = join(LOCAL, runId, relPath);
@@ -263,12 +278,11 @@ export function createRemoteMirror(options) {
   const isRemote = (runId) => remoteRunIds.has(runId);
 
   /**
-   * Whether the viewer may delete this run outright. Your own shared runs are
-   * yours to bin; someone else's are not, and an unattributed one is assumed
-   * to predate user stamping rather than to belong to nobody.
+   * Whether this run is yours. An unattributed run is assumed to predate user
+   * stamping rather than to belong to nobody, and a viewer with no identity of
+   * its own can't meaningfully claim otherwise — both are treated as yours.
    */
-  async function canDelete(runId) {
-    if (!isRemote(runId)) return true;
+  async function isOwn(runId) {
     const runJson = join(LOCAL, runId, "run.json");
     if (!existsSync(runJson)) return false;
     try {
@@ -277,6 +291,28 @@ export function createRemoteMirror(options) {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Whether the viewer may delete this run outright. Anything not in the store
+   * is local, so it's yours to bin; a shared run is deleted for everyone, so
+   * only its owner may.
+   */
+  async function canDelete(runId) {
+    if (!isRemote(runId)) return true;
+    return isOwn(runId);
+  }
+
+  /**
+   * Whether this run can be shared from the UI: it has to be local (sharing an
+   * already-shared run is a no-op) and yours. The ownership check matters more
+   * than it looks — a run someone else shared leaves an index-only stub in your
+   * results dir when they delete it, and pushing that back would republish
+   * their run as a broken shell.
+   */
+  async function canShare(runId) {
+    if (isRemote(runId)) return false;
+    return isOwn(runId);
   }
 
   return {
@@ -288,6 +324,8 @@ export function createRemoteMirror(options) {
     deleteRun,
     isRemote,
     canDelete,
+    canShare,
+    pushRun,
     status: () => ({
       enabled: true,
       url: REMOTE,

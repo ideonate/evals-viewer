@@ -204,6 +204,7 @@ export function createEvalsApiMiddleware(options) {
           user_tags: userTags,
           shared: isShared,
           can_delete: mirror ? await mirror.canDelete(runId) : true,
+          can_share: mirror ? await mirror.canShare(runId) : false,
           evals,
         });
       }
@@ -413,6 +414,37 @@ export function createEvalsApiMiddleware(options) {
     }
   }
 
+  async function handleShareRun(req, res, runId) {
+    if (!mirror) {
+      return errorResponse(res, "No shared store is configured", 400);
+    }
+    const runDir = resolveRunDir(runId);
+    if (!runDir) return errorResponse(res, "Invalid run ID", 400);
+    if (!existsSync(runDir) || !statSync(runDir).isDirectory()) {
+      return errorResponse(res, `Run '${runId}' not found`, 404);
+    }
+    if (mirror.isRemote(runId)) {
+      return jsonResponse(res, { shared: true, run_id: runId });
+    }
+    if (!(await mirror.canShare(runId))) {
+      return errorResponse(
+        res,
+        `Run '${runId}' belongs to someone else — only its owner can share it`,
+        403,
+      );
+    }
+    try {
+      await mirror.pushRun(runId);
+      jsonResponse(res, {
+        shared: true,
+        run_id: runId,
+        url: `${mirror.url}/${runId}/`,
+      });
+    } catch (err) {
+      errorResponse(res, `Could not share run: ${err.message}`);
+    }
+  }
+
   async function handleRemoteStatus(req, res) {
     // Report the identity even with no shared store: the viewer shows who it
     // is running as, which is worth knowing whether or not sharing is on.
@@ -443,6 +475,11 @@ export function createEvalsApiMiddleware(options) {
 
     if (path === "/api/remote/refresh" && req.method === "POST") {
       return handleRemoteRefresh(req, res);
+    }
+
+    const shareMatch = path.match(/^\/api\/evals\/([^/]+)\/share$/);
+    if (shareMatch && req.method === "POST") {
+      return handleShareRun(req, res, decodeURIComponent(shareMatch[1]));
     }
 
     const addTagMatch = path.match(/^\/api\/evals\/([^/]+)\/tags$/);

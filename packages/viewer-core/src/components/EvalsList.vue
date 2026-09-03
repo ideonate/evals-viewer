@@ -128,6 +128,15 @@
               +
             </button>
             <button
+              v-if="run.can_share"
+              class="share-run-btn"
+              :disabled="sharingRunId === run.run_id"
+              :title="`Push this run to ${remote.url} so colleagues can see it`"
+              @click.stop="shareRun(run)"
+            >
+              {{ sharingRunId === run.run_id ? "Sharing…" : "↑ Share" }}
+            </button>
+            <button
               v-if="run.can_delete !== false"
               class="delete-run-btn"
               title="Delete this run"
@@ -248,6 +257,7 @@ const selectedForCompare = ref([]);
 const groupBy = ref(rememberedGroupBy);
 watch(groupBy, (v) => (rememberedGroupBy = v));
 const runToDelete = ref(null);
+const sharingRunId = ref(null);
 // Shared object store, when the server has one configured. `enabled: false`
 // keeps every v-if in the template quiet for a purely local setup. Shared with
 // the app header, which shows the same identity.
@@ -442,6 +452,27 @@ async function removeTag(run, tag) {
     run.tags = run.tags.filter((t) => t !== tag);
   } catch (e) {
     error.value = e.message;
+  }
+}
+
+async function shareRun(run) {
+  sharingRunId.value = run.run_id;
+  try {
+    const response = await fetch(
+      `/api/evals/${encodeURIComponent(run.run_id)}/share`,
+      { method: "POST" },
+    );
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error || "Failed to share run");
+    }
+    // Re-list rather than patching the row: sharing flips can_share/can_delete
+    // and the shared badge, all of which the server decides.
+    await fetchRuns();
+  } catch (e) {
+    error.value = e.message;
+  } finally {
+    sharingRunId.value = null;
   }
 }
 
@@ -758,6 +789,35 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 1rem;
+}
+
+.share-run-btn {
+  margin-left: auto;
+  background: none;
+  border: 1px solid #b8c6d4;
+  color: #4a6a8a;
+  font-size: 0.7rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.share-run-btn:hover:not(:disabled) {
+  border-color: #3498db;
+  color: #1e6fa8;
+  background: #f0f7ff;
+}
+
+.share-run-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* When Share is present it takes the spacer role, so Delete sits next to it. */
+.share-run-btn + .delete-run-btn {
+  margin-left: 0;
 }
 
 .delete-run-btn {
