@@ -43,29 +43,17 @@ const DEFAULT_INDEX_TTL_MS = 30_000;
 /** Files small enough to pull for *every* run so the list page can render. */
 const INDEX_INCLUDES = ["*/run.json", "*/tags.json", "*/*/summary.json"];
 
-/** Account names a container image hands out — they identify the image, not the person. */
-const GENERIC_ACCOUNTS = new Set([
-  "root",
-  "node",
-  "vscode",
-  "ubuntu",
-  "user",
-  "devcontainer",
-]);
-
 /**
- * Stamped on runs when no name can be worked out. Deliberately obvious: a badge
- * reading "default" on the team's list is a visible prompt to set EVALS_USER,
- * where a plausible-looking guess would just be quietly wrong.
+ * Stamped on runs when no name is configured at all, so a run always carries
+ * one. Which name hardly matters until runs are shared, and by then the dev has
+ * set EVALS_USER.
  */
 const DEFAULT_USER = "default";
 
 /**
  * Who is running the viewer — the name your runs are stamped with, and what
  * decides whose shared runs you may delete. Mirrors
- * `evals_viewer_io.share.resolve_user` on the writer side, fallback included:
- * a container's account name is generic and gets skipped, so an unconfigured
- * one lands on DEFAULT_USER.
+ * `evals_viewer_io.share.resolve_user` on the writer side.
  */
 export function resolveUser() {
   for (const candidate of [
@@ -81,7 +69,7 @@ export function resolveUser() {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "")
       .slice(0, 20);
-    if (slug && !GENERIC_ACCOUNTS.has(slug)) return slug;
+    if (slug) return slug;
   }
   return DEFAULT_USER;
 }

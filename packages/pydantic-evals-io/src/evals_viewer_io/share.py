@@ -62,36 +62,28 @@ def _slug(value: str, max_length: int = 20) -> str:
     return _SLUG_RE.sub("-", value.strip().lower()).strip("-")[:max_length]
 
 
-#: Account names a container image hands out. They identify the image, not the
-#: person, so a run stamped with one tells a colleague nothing.
-GENERIC_ACCOUNTS = frozenset(
-    {"root", "node", "vscode", "ubuntu", "user", "devcontainer"}
-)
-
-#: Stamped on runs when no name can be worked out. Deliberately obvious: a badge
-#: reading "default" on the team's list is a visible prompt to set EVALS_USER,
-#: where a plausible-looking guess would just be quietly wrong.
+#: Stamped on runs when no name is configured at all, so a run always carries
+#: one. Which name hardly matters until runs are shared, and by then the dev has
+#: set EVALS_USER.
 DEFAULT_USER = "default"
 
 
 def resolve_user(explicit: str | None = None) -> str:
     """Work out who is running these evals, for the ``user`` field in run.json.
 
-    Checks, in order: the ``explicit`` argument, ``EVALS_USER``, then the shell's
-    ``USER`` / ``USERNAME``. Falls back to ``DEFAULT_USER``, which is what a
-    container hands you — its account name is generic, so it gets skipped.
+    Checks the ``explicit`` argument, ``EVALS_USER``, then the shell's ``USER`` /
+    ``USERNAME``, and falls back to ``DEFAULT_USER``.
     """
-    candidates = (
+    for candidate in (
         explicit,
         os.getenv(USER_ENV),
         os.getenv("USER"),
         os.getenv("USERNAME"),
-    )
-    for candidate in candidates:
+    ):
         if not candidate:
             continue
         slug = _slug(candidate.split("@")[0])
-        if slug and slug not in GENERIC_ACCOUNTS:
+        if slug:
             return slug
     return DEFAULT_USER
 

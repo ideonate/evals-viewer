@@ -41,9 +41,9 @@ Run-level metadata. Tags here are "built-in" tags supplied by the writer; user-a
 `user` is who ran it, shown on the run in the viewer and used to decide who may
 delete or unshare it — see [Sharing runs](#sharing-runs).
 `evals_viewer_io.share.resolve_user()` derives it from `EVALS_USER`, then
-`USER`/`USERNAME`, ignoring generic container accounts (`root`, `node`,
-`vscode`, …) and falling back to `"default"`. A run badged `default` is one
-where nobody set `EVALS_USER`, which is visible rather than silently wrong.
+`USER`/`USERNAME`, falling back to `"default"` if none of those yield a name.
+Which name it lands on hardly matters until runs are shared, at which point the
+dev sets `EVALS_USER`.
 
 ### `summary.json` (per eval)
 
