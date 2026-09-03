@@ -30,7 +30,7 @@
  * keeps this package dependency-free.
  */
 
-import { execFile, execFileSync } from "child_process";
+import { execFile } from "child_process";
 import { existsSync } from "fs";
 import { readdir, readFile, rm } from "fs/promises";
 import { join, resolve } from "path";
@@ -53,34 +53,25 @@ const GENERIC_ACCOUNTS = new Set([
   "devcontainer",
 ]);
 
-function gitIdentity() {
-  for (const key of ["user.email", "user.name"]) {
-    try {
-      const value = execFileSync("git", ["config", "--get", key], {
-        encoding: "utf-8",
-        stdio: ["ignore", "pipe", "ignore"],
-        timeout: 2000,
-      }).trim();
-      if (value) return value;
-    } catch {
-      /* not a repo, or no git — fall through */
-    }
-  }
-  return null;
-}
+/**
+ * Stamped on runs when no name can be worked out. Deliberately obvious: a badge
+ * reading "default" on the team's list is a visible prompt to set EVALS_USER,
+ * where a plausible-looking guess would just be quietly wrong.
+ */
+const DEFAULT_USER = "default";
 
 /**
- * Who is running the viewer — used to decide whether a shared run is yours to
- * delete. Mirrors `evals_viewer_io.share.resolve_user` on the writer side, git
- * fallback included: inside a devcontainer everyone is `node`, so the git
- * identity is the only thing that distinguishes one developer from another.
+ * Who is running the viewer — the name your runs are stamped with, and what
+ * decides whose shared runs you may delete. Mirrors
+ * `evals_viewer_io.share.resolve_user` on the writer side, fallback included:
+ * a container's account name is generic and gets skipped, so an unconfigured
+ * one lands on DEFAULT_USER.
  */
 export function resolveUser() {
   for (const candidate of [
     process.env.EVALS_USER,
     process.env.USER,
     process.env.USERNAME,
-    gitIdentity(),
   ]) {
     if (!candidate) continue;
     const slug = candidate
@@ -92,7 +83,7 @@ export function resolveUser() {
       .slice(0, 20);
     if (slug && !GENERIC_ACCOUNTS.has(slug)) return slug;
   }
-  return null;
+  return DEFAULT_USER;
 }
 
 /**
@@ -183,7 +174,9 @@ export function createRemoteMirror(options) {
    * never be mistaken for an empty one.
    */
   async function pruneDeleted() {
-    if (!user) return; // Can't judge ownership without an identity of our own.
+    // resolveUser always yields a name, but a caller can pass `user: null`
+    // explicitly; without an identity there is no ownership to judge.
+    if (!user) return;
     let entries;
     try {
       entries = await readdir(LOCAL, { withFileTypes: true });

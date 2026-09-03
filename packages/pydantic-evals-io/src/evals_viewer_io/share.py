@@ -29,6 +29,7 @@ from datetime import datetime
 from pathlib import Path
 
 __all__ = [
+    "DEFAULT_USER",
     "ShareError",
     "make_run_id",
     "push_run",
@@ -62,45 +63,29 @@ def _slug(value: str, max_length: int = 20) -> str:
 
 
 #: Account names a container image hands out. They identify the image, not the
-#: person, so they're skipped in favour of the git identity behind them.
+#: person, so a run stamped with one tells a colleague nothing.
 GENERIC_ACCOUNTS = frozenset(
     {"root", "node", "vscode", "ubuntu", "user", "devcontainer"}
 )
 
-
-def _git_identity() -> str | None:
-    """The local part of git's configured email, e.g. dan@example.com -> "dan"."""
-    for key in ("user.email", "user.name"):
-        try:
-            result = subprocess.run(
-                ["git", "config", "--get", key],
-                capture_output=True,
-                text=True,
-                timeout=2,
-            )
-        except (FileNotFoundError, subprocess.SubprocessError):
-            return None
-        value = result.stdout.strip()
-        if result.returncode == 0 and value:
-            return value.split("@")[0]
-    return None
+#: Stamped on runs when no name can be worked out. Deliberately obvious: a badge
+#: reading "default" on the team's list is a visible prompt to set EVALS_USER,
+#: where a plausible-looking guess would just be quietly wrong.
+DEFAULT_USER = "default"
 
 
-def resolve_user(explicit: str | None = None) -> str | None:
+def resolve_user(explicit: str | None = None) -> str:
     """Work out who is running these evals, for the ``user`` field in run.json.
 
-    Checks, in order: the ``explicit`` argument, ``EVALS_USER``, the shell's
-    ``USER`` / ``USERNAME``, then git's configured identity. The git fallback is
-    what makes this work unconfigured inside a devcontainer, where everyone is
-    ``node``. Returns None if nothing looks usable — an unattributed run is
-    valid, not an error.
+    Checks, in order: the ``explicit`` argument, ``EVALS_USER``, then the shell's
+    ``USER`` / ``USERNAME``. Falls back to ``DEFAULT_USER``, which is what a
+    container hands you — its account name is generic, so it gets skipped.
     """
     candidates = (
         explicit,
         os.getenv(USER_ENV),
         os.getenv("USER"),
         os.getenv("USERNAME"),
-        _git_identity(),
     )
     for candidate in candidates:
         if not candidate:
@@ -108,7 +93,7 @@ def resolve_user(explicit: str | None = None) -> str | None:
         slug = _slug(candidate.split("@")[0])
         if slug and slug not in GENERIC_ACCOUNTS:
             return slug
-    return None
+    return DEFAULT_USER
 
 
 def make_run_id(

@@ -170,7 +170,7 @@ session and profile):
 ```python
 from evals_viewer_io import make_run_id, push_run, resolve_user
 
-user = resolve_user()                    # EVALS_USER, else USER/USERNAME, else git
+user = resolve_user()                    # EVALS_USER, else USER/USERNAME, else "default"
 run_id = make_run_id(user=user)          # 20260903_101500_dan
 ...                                      # write the run as usual
 push_run(run_dir)                        # honours EVALS_SHARE_URL
@@ -187,7 +187,7 @@ the results.
 | --- | --- |
 | `EVALS_SHARE_URL` | Destination, e.g. `s3://your-bucket/runs`. Unset = sharing off, and `push_run` is a no-op returning None. |
 | `EVALS_SHARE_PROFILE` | AWS profile to push with (default: the ambient credential chain). |
-| `EVALS_USER` | Name stamped onto runs, if the shell's `USER` isn't the one you want. |
+| `EVALS_USER` | Name stamped onto runs. Needed wherever the shell user is generic — in a container everyone is `node`, so runs land as `default` without it. |
 | `EVALS_SHARE_ALWAYS` | Push every finished run without being asked. For unattended jobs — a nightly eval that should always publish. Off by default. |
 
 Put the user in the run id: a bare timestamp collides when two people start a run
